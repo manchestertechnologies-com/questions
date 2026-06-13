@@ -75,6 +75,8 @@ const ImportCenter = () => {
   // File state
   const [file, setFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [importMethod, setImportMethod] = useState('file'); // 'file' or 'json'
+  const [pastedJson, setPastedJson] = useState('');
   
   // Loading & statuses
   const [loading, setLoading] = useState(false);
@@ -247,6 +249,121 @@ const ImportCenter = () => {
       setErrorMessage(err.response?.data?.error || 'Failed to parse questions. Please check document structure.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleParsePasteJson = (e) => {
+    e.preventDefault();
+    if (!pastedJson.trim()) {
+      setErrorMessage('Please paste some JSON to parse.');
+      return;
+    }
+    if (!selectedSubject || !selectedChapter || !selectedConcept) {
+      setErrorMessage('Please select Subject, Chapter, and Concept before importing.');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    try {
+      const parsed = JSON.parse(pastedJson);
+      const items = Array.isArray(parsed) ? parsed : [parsed];
+      
+      const validatedQuestions = items.map((item, i) => {
+        const qNum = typeof item.questionNumber === 'number' ? item.questionNumber : (i + 1);
+        const questionText = item.questionText || '';
+        
+        if (!questionText) {
+          throw new Error(`Question entry at index ${i} is missing 'questionText'.`);
+        }
+        
+        // Options normalization
+        const optA = (typeof item.options?.A === 'object') ? (item.options.A.text || '') : (item.options?.A || item.optionA || '');
+        const optB = (typeof item.options?.B === 'object') ? (item.options.B.text || '') : (item.options?.B || item.optionB || '');
+        const optC = (typeof item.options?.C === 'object') ? (item.options.C.text || '') : (item.options?.C || item.optionC || '');
+        const optD = (typeof item.options?.D === 'object') ? (item.options.D.text || '') : (item.options?.D || item.optionD || '');
+        
+        const correctAnswer = String(item.correctAnswer || 'A').toUpperCase().trim();
+        if (!['A', 'B', 'C', 'D'].includes(correctAnswer)) {
+          throw new Error(`Question ${qNum} contains invalid correctAnswer '${correctAnswer}'. Must be A, B, C, or D.`);
+        }
+        
+        const explanation = item.explanation || '';
+        
+        // Initialize imageSlots
+        let imageSlots = [];
+        if (Array.isArray(item.imageSlots)) {
+          imageSlots = item.imageSlots.map(slot => ({
+            slotId: slot.slotId,
+            url: slot.url || null
+          }));
+        } else {
+          const registerSlots = (sourceText, prefix) => {
+            if (!sourceText) return;
+            const matches = sourceText.match(/\[\[IMG_SLOT\]\]/g);
+            const count = matches ? matches.length : 0;
+            for (let s = 0; s < count; s++) {
+              imageSlots.push({
+                slotId: `${prefix}_${s}`,
+                url: null
+              });
+            }
+          };
+          registerSlots(questionText, 'questionText');
+          registerSlots(optA, 'optionA');
+          registerSlots(optB, 'optionB');
+          registerSlots(optC, 'optionC');
+          registerSlots(optD, 'optionD');
+          registerSlots(explanation, 'explanation');
+        }
+        
+        return {
+          questionNumber: qNum,
+          title: item.title || `Question ${qNum}`,
+          questionType: item.questionType || 'MCQ',
+          questionText,
+          options: {
+            A: { text: optA, image: (typeof item.options?.A === 'object') ? (item.options.A.image || null) : (item.optionAImage || null) },
+            B: { text: optB, image: (typeof item.options?.B === 'object') ? (item.options.B.image || null) : (item.optionBImage || null) },
+            C: { text: optC, image: (typeof item.options?.C === 'object') ? (item.options.C.image || null) : (item.optionCImage || null) },
+            D: { text: optD, image: (typeof item.options?.D === 'object') ? (item.options.D.image || null) : (item.optionDImage || null) }
+          },
+          correctAnswer,
+          explanation,
+          imageSlots,
+          difficulty: item.difficulty || 'Easy',
+          examType: Array.isArray(item.examType) ? item.examType : [item.examType || 'Board'],
+          classNum: item.classNum || 11,
+          marks: typeof item.marks === 'number' ? item.marks : 4,
+          negativeMarks: typeof item.negativeMarks === 'number' ? item.negativeMarks : 1,
+          questionImage: item.questionImage || null,
+          optionAImage: item.optionAImage || null,
+          optionBImage: item.optionBImage || null,
+          optionCImage: item.optionCImage || null,
+          optionDImage: item.optionDImage || null,
+          solutionImage: item.solutionImage || null,
+        };
+      });
+      
+      setParsedQuestions(validatedQuestions);
+      setReviewMode(true);
+      setStatusMessage(`Successfully parsed ${validatedQuestions.length} questions from pasted JSON. Please review them below.`);
+    } catch (err) {
+      console.error(err);
+      setErrorMessage('JSON Parsing Failed: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (importMethod === 'file') {
+      handleImport(e);
+    } else {
+      handleParsePasteJson(e);
     }
   };
 
@@ -658,7 +775,7 @@ const ImportCenter = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Form: Syllabus selectors & overrides */}
-        <form onSubmit={handleImport} className="lg:col-span-2 space-y-6">
+        <form onSubmit={handleSubmit} className="lg:col-span-2 space-y-6">
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-2xl p-6 space-y-4 shadow-sm">
             <h2 className="text-md font-bold text-slate-950 dark:text-white border-b border-slate-100 dark:border-slate-700/50 pb-2">
               Syllabus Mapping Settings
@@ -815,62 +932,100 @@ const ImportCenter = () => {
 
           {/* Draggable upload zone */}
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-2xl p-6 space-y-4 shadow-sm">
-            <h2 className="text-md font-bold text-slate-950 dark:text-white border-b border-slate-100 dark:border-slate-700/50 pb-2">
-              File Selection
-            </h2>
-
-            <div 
-              onDragEnter={handleDrag}
-              onDragOver={handleDrag}
-              onDragLeave={handleDrag}
-              onDrop={handleDrop}
-              className={`w-full min-h-[160px] border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center transition-all relative ${
-                dragActive 
-                  ? 'border-primary-500 bg-primary-500/5' 
-                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-              }`}
-            >
-              <input 
-                id="file-upload"
-                type="file" 
-                onChange={handleFileChange}
-                accept=".docx,.doc,.json"
-                className="hidden"
-              />
-              
-              {!file ? (
-                <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 mb-1">
-                    <Upload size={20} />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 dark:text-white">Drag & drop your file or <span className="text-primary-500 underline">browse</span></span>
-                  <span className="text-xs text-slate-400 mt-1">Supports Word .docx, .doc or .json file formats</span>
-                </label>
-              ) : (
-                <div className="w-full flex items-center justify-between bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-primary-100 dark:bg-primary-950/30 flex items-center justify-center text-primary-500 font-bold text-xs uppercase">
-                      <File size={18} />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[200px] sm:max-w-[400px]">
-                        {file.name}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {(file.size / (1024 * 1024)).toFixed(2)} MB
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    type="button" 
-                    onClick={() => setFile(null)}
-                    className="p-2 text-slate-400 hover:text-danger-500 rounded-lg hover:bg-danger-50 dark:hover:bg-danger-950/20 transition-all cursor-pointer"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              )}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/50 pb-2 mb-4">
+              <h2 className="text-md font-bold text-slate-950 dark:text-white">
+                Import Source
+              </h2>
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setImportMethod('file')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    importMethod === 'file'
+                      ? 'bg-white dark:bg-slate-800 text-primary-500 shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
+                  }`}
+                >
+                  Upload File
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportMethod('json')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    importMethod === 'json'
+                      ? 'bg-white dark:bg-slate-800 text-primary-500 shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
+                  }`}
+                >
+                  Paste JSON
+                </button>
+              </div>
             </div>
+
+            {importMethod === 'file' ? (
+              <div 
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
+                className={`w-full min-h-[160px] border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center transition-all relative ${
+                  dragActive 
+                    ? 'border-primary-500 bg-primary-500/5' 
+                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                }`}
+              >
+                <input 
+                  id="file-upload"
+                  type="file" 
+                  onChange={handleFileChange}
+                  accept=".docx,.doc,.json"
+                  className="hidden"
+                />
+                
+                {!file ? (
+                  <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center gap-2">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 mb-1">
+                      <Upload size={20} />
+                    </div>
+                    <span className="text-sm font-bold text-slate-800 dark:text-white">Drag & drop your file or <span className="text-primary-500 underline">browse</span></span>
+                    <span className="text-xs text-slate-400 mt-1">Supports Word .docx, .doc or .json file formats</span>
+                  </label>
+                ) : (
+                  <div className="w-full flex items-center justify-between bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-primary-100 dark:bg-primary-950/30 flex items-center justify-center text-primary-500 font-bold text-xs uppercase">
+                        <File size={18} />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[200px] sm:max-w-[400px]">
+                          {file.name}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {(file.size / (1024 * 1024)).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => setFile(null)}
+                      className="p-2 text-slate-400 hover:text-danger-500 rounded-lg hover:bg-danger-50 dark:hover:bg-danger-950/20 transition-all cursor-pointer"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <textarea
+                  value={pastedJson}
+                  onChange={(e) => setPastedJson(e.target.value)}
+                  placeholder={`[\n  {\n    "questionNumber": 1,\n    "questionText": "A block of mass 2kg is placed on...",\n    "options": {\n      "A": "10 m/s²",\n      "B": "5 m/s²",\n      "C": "0 m/s²",\n      "D": "2 m/s²"\n    },\n    "correctAnswer": "B",\n    "explanation": "Using F = ma, we get a = F/m..."\n  }\n]`}
+                  rows={8}
+                  className="w-full p-4 bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-[11px] font-mono text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-slate-400 dark:placeholder-slate-700 leading-normal"
+                />
+              </div>
+            )}
           </div>
 
           {/* Notifications */}
@@ -897,7 +1052,7 @@ const ImportCenter = () => {
           {/* Trigger Import Button */}
           <button
             type="submit"
-            disabled={loading || !file}
+            disabled={loading || (importMethod === 'file' ? !file : !pastedJson.trim())}
             className="w-full py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 text-white font-bold rounded-xl text-sm shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2 active:scale-[0.99] transition-all cursor-pointer"
           >
             {loading ? (

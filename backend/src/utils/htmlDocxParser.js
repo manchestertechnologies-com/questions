@@ -7,11 +7,39 @@ const mammoth = require('mammoth');
  * @param {string} dataUri - base64 data URI
  * @returns {string|null} Relative URL of saved file
  */
-const saveBase64Image = (dataUri) => {
+/**
+ * Saves base64 encoded image to a temporary file in the uploads directory or uploads to Cloudinary.
+ * If running on Vercel and Cloudinary is missing, returns the base64 URI itself as a fallback.
+ * @param {string} dataUri - base64 data URI
+ * @returns {Promise<string|null>} Relative URL or secure URL of saved/uploaded file
+ */
+const saveBase64Image = async (dataUri) => {
   if (!dataUri || !dataUri.startsWith('data:')) {
     return null;
   }
   
+  // 1. Try Cloudinary if configured
+  const isCloudinaryConfigured =
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET;
+
+  if (isCloudinaryConfigured) {
+    try {
+      const cloudinaryInstance = require('../config/cloudinary');
+      const result = await cloudinaryInstance.uploader.upload(dataUri, { folder: 'manchester_questions' });
+      return result.secure_url;
+    } catch (err) {
+      console.error('Cloudinary upload from base64 failed:', err);
+    }
+  }
+
+  // 2. If Vercel (or any read-only/serverless env) and no Cloudinary, return the dataUri itself (base64 string)
+  if (process.env.VERCEL) {
+    return dataUri;
+  }
+  
+  // 3. Local fallback (disk storage) for local dev without Cloudinary
   try {
     const parts = dataUri.split(',');
     const mimeMatch = parts[0].match(/:(.*?);/);
@@ -31,8 +59,8 @@ const saveBase64Image = (dataUri) => {
     
     return `/uploads/${fileName}`;
   } catch (error) {
-    console.error('Error saving base64 image:', error);
-    return null;
+    console.error('Error saving base64 image locally, returning dataUri as fallback:', error);
+    return dataUri; // Final fallback
   }
 };
 
@@ -194,7 +222,7 @@ const parseDocx = async (buffer) => {
             if (imgMatch) {
               const idx = parseInt(imgMatch[1], 10);
               const src = images[idx];
-              const imageUrl = saveBase64Image(src);
+              const imageUrl = await saveBase64Image(src);
               
               currentQuestion.questionImage = imageUrl;
               currentQuestion.questionText += (currentQuestion.questionText ? ' ' : '') + '[QUESTION_IMAGE_SLOT]';
@@ -211,7 +239,7 @@ const parseDocx = async (buffer) => {
           if (imgMatch) {
             const idx = parseInt(imgMatch[1], 10);
             const src = images[idx];
-            const imageUrl = saveBase64Image(src);
+            const imageUrl = await saveBase64Image(src);
             
             if (currentContext === 'questionText') {
               currentQuestion.questionImage = imageUrl;

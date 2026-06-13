@@ -646,17 +646,17 @@ exports.bulkSaveQuestions = async (req, res) => {
       if (q.solutionImage) slots.push({ slotId: 'explanation_0', url: q.solutionImage });
 
       const newQuestion = await Question.create({
-        questionNumber: parseInt(q.questionNumber, 10),
-        title: q.title || `Question ${q.questionNumber}`,
+        questionNumber: parseInt(q.questionNumber, 10) || (savedQuestions.length + 1),
+        title: q.title || `Question ${q.questionNumber || (savedQuestions.length + 1)}`,
         questionType: q.questionType || 'MCQ',
-        questionText: q.questionText,
+        questionText: q.questionText || 'Question text placeholder',
         options: {
           A: { text: q.options?.A?.text || q.optionA || '', image: q.optionAImage || null },
           B: { text: q.options?.B?.text || q.optionB || '', image: q.optionBImage || null },
           C: { text: q.options?.C?.text || q.optionC || '', image: q.optionCImage || null },
           D: { text: q.options?.D?.text || q.optionD || '', image: q.optionDImage || null },
         },
-        correctAnswer: q.correctAnswer || '',
+        correctAnswer: q.correctAnswer || 'A',
         explanation: q.explanation || '',
         imageSlots: slots,
         subject: subject || q.subject,
