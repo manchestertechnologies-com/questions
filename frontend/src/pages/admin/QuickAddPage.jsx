@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import API from '../../services/api';
 import {
   Zap, ChevronDown, CheckCircle, AlertCircle, Loader2, X, Eye,
-  RotateCcw, Save, Plus, BookOpen, Keyboard, Copy, ChevronRight
+  RotateCcw, Save, Plus, BookOpen, Keyboard, Copy, ChevronRight,
+  Image as ImageIcon
 } from 'lucide-react';
 
 const SUBJECT_LEVELS = ['subject', 'chapter', 'concept', 'subConcept'];
@@ -17,6 +18,50 @@ const QUESTION_TYPES = [
   { value: 'Case-Study', label: 'Case Study', desc: 'Passage-based' },
 ];
 
+const QuickAddImageSlot = ({ label, imageUrl, onUpload, onDelete, loading }) => {
+  const displayUrl = imageUrl?.startsWith('/') ? `http://localhost:5000${imageUrl}` : imageUrl;
+  return (
+    <div className="space-y-1 my-2">
+      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">{label}</label>
+      {imageUrl ? (
+        <div className="relative group border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-900/30 p-2 flex items-center justify-between gap-2 max-w-[240px]">
+          <img 
+            src={displayUrl} 
+            alt={label} 
+            className="h-10 w-16 object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-white"
+          />
+          <button
+            type="button"
+            onClick={onDelete}
+            className="px-2 py-1 bg-danger-50 hover:bg-danger-100 text-danger-600 rounded-lg text-[10px] font-bold cursor-pointer transition-all active:scale-[0.98]"
+          >
+            Remove
+          </button>
+        </div>
+      ) : (
+        <label className="border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 rounded-xl p-2 flex flex-col items-center justify-center cursor-pointer hover:border-primary-400 transition-all max-w-[200px]">
+          {loading ? (
+            <Loader2 className="animate-spin text-primary-500" size={14} />
+          ) : (
+            <span className="text-[10px] font-bold text-primary-500 flex items-center gap-1"><Plus size={10} /> Add {label}</span>
+          )}
+          <input 
+            type="file" 
+            accept="image/*"
+            className="hidden" 
+            disabled={loading}
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                onUpload(e.target.files[0]);
+              }
+            }} 
+          />
+        </label>
+      )}
+    </div>
+  );
+};
+
 const emptyForm = () => ({
   questionText: '',
   optionA: '', optionB: '', optionC: '', optionD: '',
@@ -30,6 +75,12 @@ const emptyForm = () => ({
   questionBank: '',
   topic: '',
   tags: '',
+  questionImage: null,
+  optionAImage: null,
+  optionBImage: null,
+  optionCImage: null,
+  optionDImage: null,
+  solutionImage: null,
 });
 
 const QuickAddPage = () => {
@@ -43,6 +94,32 @@ const QuickAddPage = () => {
   const [saving, setSaving] = useState(false);
   const [sessionCount, setSessionCount] = useState(0);
   const [toast, setToast] = useState(null);
+  const [loadingField, setLoadingField] = useState(null);
+
+  const handleUploadSlot = async (fieldName, file) => {
+    setLoadingField(fieldName);
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+      const res = await API.post('/questions/temp-upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success) {
+        setForm(f => ({ ...f, [fieldName]: res.data.url }));
+        showToast(`${fieldName.replace('Image', '')} image uploaded successfully!`, 'success');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to upload image', 'error');
+    } finally {
+      setLoadingField(null);
+    }
+  };
+
+  const handleDeleteSlot = (fieldName) => {
+    setForm(f => ({ ...f, [fieldName]: null }));
+    showToast(`${fieldName.replace('Image', '')} image removed.`, 'success');
+  };
 
   // Syllabus
   const [subjects, setSubjects] = useState([]);
@@ -126,13 +203,19 @@ const QuickAddPage = () => {
     setForm(f => ({
       ...f,
       questionText: q.questionText || '',
-      optionA: q.options?.A || '',
-      optionB: q.options?.B || '',
-      optionC: q.options?.C || '',
-      optionD: q.options?.D || '',
+      optionA: q.options?.A?.text || q.options?.A || '',
+      optionB: q.options?.B?.text || q.options?.B || '',
+      optionC: q.options?.C?.text || q.options?.C || '',
+      optionD: q.options?.D?.text || q.options?.D || '',
       correctAnswer: q.correctAnswer || '',
       explanation: q.explanation || '',
       questionType: q.questionType || 'MCQ',
+      questionImage: q.questionImage || null,
+      optionAImage: q.optionAImage || null,
+      optionBImage: q.optionBImage || null,
+      optionCImage: q.optionCImage || null,
+      optionDImage: q.optionDImage || null,
+      solutionImage: q.solutionImage || null,
     }));
     setShowPreview(true);
   };
@@ -417,34 +500,50 @@ const QuickAddPage = () => {
                   onChange={e => setForm(f => ({ ...f, questionText: e.target.value }))}
                   rows={4}
                 />
+                <QuickAddImageSlot
+                  label="Question Image"
+                  imageUrl={form.questionImage}
+                  onUpload={(file) => handleUploadSlot('questionImage', file)}
+                  onDelete={() => handleDeleteSlot('questionImage')}
+                  loading={loadingField === 'questionImage'}
+                />
               </div>
 
               {['A', 'B', 'C', 'D'].map(opt => (
-                <div key={opt} className="flex gap-2 items-center">
-                  <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-                    form.correctAnswer === opt
-                      ? 'bg-emerald-500 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                  }`}>{opt}</span>
-                  <input
-                    type="text"
-                    placeholder={`Option ${opt}`}
-                    value={form[`option${opt}`]}
-                    onChange={e => setForm(f => ({ ...f, [`option${opt}`]: e.target.value }))}
-                    className="input-field flex-1"
-                  />
-                  <button
-                    type="button"
-                    title="Mark as correct"
-                    onClick={() => setForm(f => ({ ...f, correctAnswer: opt }))}
-                    className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                <div key={opt} className="space-y-2 border border-slate-100 dark:border-slate-800/80 p-3 rounded-2xl bg-slate-50/10">
+                  <div className="flex gap-2 items-center">
+                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
                       form.correctAnswer === opt
-                        ? 'bg-emerald-50 border-emerald-300 text-emerald-600 dark:bg-emerald-950/30 dark:border-emerald-700'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:border-emerald-400'
-                    }`}
-                  >
-                    <CheckCircle size={14} />
-                  </button>
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}>{opt}</span>
+                    <input
+                      type="text"
+                      placeholder={`Option ${opt}`}
+                      value={form[`option${opt}`]}
+                      onChange={e => setForm(f => ({ ...f, [`option${opt}`]: e.target.value }))}
+                      className="input-field flex-1 text-xs"
+                    />
+                    <button
+                      type="button"
+                      title="Mark as correct"
+                      onClick={() => setForm(f => ({ ...f, correctAnswer: opt }))}
+                      className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                        form.correctAnswer === opt
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-600 dark:bg-emerald-950/30 dark:border-emerald-700'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:border-emerald-400'
+                      }`}
+                    >
+                      <CheckCircle size={14} />
+                    </button>
+                  </div>
+                  <QuickAddImageSlot
+                    label={`Option ${opt} Image`}
+                    imageUrl={form[`option${opt}Image`]}
+                    onUpload={(file) => handleUploadSlot(`option${opt}Image`, file)}
+                    onDelete={() => handleDeleteSlot(`option${opt}Image`)}
+                    loading={loadingField === `option${opt}Image`}
+                  />
                 </div>
               ))}
 
@@ -460,6 +559,13 @@ const QuickAddPage = () => {
                   placeholder="Solution explanation (supports LaTeX)"
                   value={form.explanation}
                   onChange={e => setForm(f => ({ ...f, explanation: e.target.value }))} />
+                <QuickAddImageSlot
+                  label="Solution Image"
+                  imageUrl={form.solutionImage}
+                  onUpload={(file) => handleUploadSlot('solutionImage', file)}
+                  onDelete={() => handleDeleteSlot('solutionImage')}
+                  loading={loadingField === 'solutionImage'}
+                />
               </div>
 
               <div>
