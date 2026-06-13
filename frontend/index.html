@@ -6,13 +6,47 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
     <!-- SEO Optimization -->
-    <title>Manchester Technologies - JEE, NEET, KCET, Board Exam Question Bank</title>
-    <meta name="description" content="A premium production-ready Question Bank Management System offering preloaded NCERT Class 11 and 12 syllabus hierarchies, admin bulk parsing engines, and mock examination student arenas." />
+    <title>Manchester Technologies — Question Bank Management System</title>
+    <meta name="description" content="Professional Question Bank Management System for JEE, NEET, KCET, CBSE, ICSE, State Boards and competitive exams. Smart question parsing, difficulty management, image management, and advanced security." />
+    <meta name="keywords" content="question bank, JEE, NEET, KCET, CBSE, ICSE, exam preparation, question management" />
+    <meta name="robots" content="noindex, nofollow" />
 
-    <!-- Google Fonts for sleek premium look -->
+    <!-- Google Fonts — Inter + Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+    <!-- MathJax for LaTeX rendering -->
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [['\\(', '\\)'], ['$', '$']],
+          displayMath: [['\\[', '\\]'], ['$$', '$$']],
+          processEscapes: true,
+        },
+        options: {
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+        },
+        startup: {
+          typeset: false,
+        },
+      };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+
+    <!-- Print protection -->
+    <style>
+      @media print {
+        * { display: none !important; }
+        body::before {
+          display: block !important;
+          content: 'Printing this content is not permitted.';
+          font-size: 24px;
+          text-align: center;
+          padding: 100px;
+        }
+      }
+    </style>
   </head>
   <body class="h-full bg-slate-50 text-slate-900 font-sans antialiased selection:bg-primary-500 selection:text-white transition-colors duration-200">
     <div id="root" class="min-h-full flex flex-col"></div>

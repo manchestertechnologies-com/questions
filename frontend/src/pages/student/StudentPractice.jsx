@@ -168,40 +168,81 @@ const StudentPractice = () => {
     }
   };
 
-  // Render text and replace [[IMG_SLOT]] with inline image preview
+  // Render text and replace [[IMG_SLOT]] or new slot placeholders with inline image preview
   const renderTextWithSlots = (text, prefix) => {
     if (!text) return null;
-    const parts = text.split('[[IMG_SLOT]]');
     
-    return (
-      <span>
-        {parts.map((part, index) => {
-          const slotId = `${prefix}_${index}`;
-          const slot = activeQuestion.imageSlots.find(s => s.slotId === slotId);
-          
-          return (
-            <React.Fragment key={index}>
-              <span>{part}</span>
-              {index < parts.length - 1 && (
-                <span className="block my-3">
-                  {slot && slot.url ? (
-                    <img 
-                      src={slot.url.startsWith('/') ? `http://localhost:5000${slot.url}` : slot.url} 
-                      alt={slotId} 
-                      className="max-h-56 rounded-xl object-contain border border-slate-200 dark:border-slate-800 bg-white"
-                    />
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-400 font-mono">
-                      [ Diagram pending admin upload ]
-                    </span>
-                  )}
+    const newPlaceholders = {
+      '[QUESTION_IMAGE_SLOT]': activeQuestion?.questionImage,
+      '[OPTION_A_IMAGE_SLOT]': activeQuestion?.optionAImage,
+      '[OPTION_B_IMAGE_SLOT]': activeQuestion?.optionBImage,
+      '[OPTION_C_IMAGE_SLOT]': activeQuestion?.optionCImage,
+      '[OPTION_D_IMAGE_SLOT]': activeQuestion?.optionDImage,
+      '[SOLUTION_IMAGE_SLOT]': activeQuestion?.solutionImage
+    };
+
+    let elements = [text];
+    
+    for (const [placeholder, imgUrl] of Object.entries(newPlaceholders)) {
+      const nextElements = [];
+      for (const el of elements) {
+        if (typeof el === 'string' && el.includes(placeholder)) {
+          const parts = el.split(placeholder);
+          for (let p = 0; p < parts.length; p++) {
+            nextElements.push(parts[p]);
+            if (p < parts.length - 1 && imgUrl) {
+              nextElements.push(
+                <span key={`${placeholder}_${p}`} className="block my-3">
+                  <img 
+                    src={imgUrl.startsWith('/') ? `http://localhost:5000${imgUrl}` : imgUrl} 
+                    alt="inline asset" 
+                    className="max-h-56 rounded-xl object-contain border border-slate-200 dark:border-slate-800 bg-white"
+                  />
                 </span>
-              )}
-            </React.Fragment>
-          );
-        })}
-      </span>
-    );
+              );
+            }
+          }
+        } else {
+          nextElements.push(el);
+        }
+      }
+      elements = nextElements;
+    }
+    
+    let finalElements = [];
+    for (const el of elements) {
+      if (typeof el === 'string' && el.includes('[[IMG_SLOT]]')) {
+        const parts = el.split('[[IMG_SLOT]]');
+        for (let p = 0; p < parts.length; p++) {
+          finalElements.push(parts[p]);
+          if (p < parts.length - 1) {
+            const slotId = `${prefix}_${p}`;
+            const slot = activeQuestion?.imageSlots?.find(s => s.slotId === slotId);
+            if (slot && slot.url) {
+              finalElements.push(
+                <span key={`legacy_img_${p}`} className="block my-3">
+                  <img 
+                    src={slot.url.startsWith('/') ? `http://localhost:5000${slot.url}` : slot.url} 
+                    alt={slotId} 
+                    className="max-h-56 rounded-xl object-contain border border-slate-200 dark:border-slate-800 bg-white"
+                  />
+                </span>
+              );
+            } else {
+              finalElements.push(
+                <span key={`legacy_img_pending_${p}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-400 font-mono">
+                  [ Diagram pending admin upload ]
+                </span>
+              );
+            }
+          }
+        }
+      } else {
+        finalElements.push(el);
+      }
+    }
+    
+    return <span>{finalElements}</span>;
   };
 
   return (
@@ -220,7 +261,7 @@ const StudentPractice = () => {
         {/* Left Side: Filter Control Panel */}
         <div className="lg:col-span-1 space-y-5">
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-2xl p-5 shadow-sm space-y-4">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 dark:border-slate-750 pb-2">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-2">
               <SlidersHorizontal size={14} className="text-primary-500" />
               Practice Filters
             </h2>
@@ -323,7 +364,7 @@ const StudentPractice = () => {
                 />
                 <button 
                   type="submit"
-                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold border border-slate-250 dark:border-slate-700 transition-all active:scale-[0.98] cursor-pointer"
+                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 transition-all active:scale-[0.98] cursor-pointer"
                 >
                   Go
                 </button>
@@ -359,7 +400,7 @@ const StudentPractice = () => {
               <div className="md:col-span-3 space-y-6">
                 <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-3xl p-6 shadow-sm space-y-6">
                   {/* Meta headers */}
-                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-750 pb-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-4">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-slate-400">SESSION PROGRESS</span>
                       <span className="px-2 py-0.5 bg-primary-100 dark:bg-primary-950/30 text-primary-500 rounded text-xs font-bold">
@@ -369,7 +410,7 @@ const StudentPractice = () => {
 
                     <div className="flex items-center gap-2">
                       {activeQuestion.examType.map(e => (
-                        <span key={e} className="px-1.5 py-0.5 bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-700 rounded text-[9px] font-bold text-slate-500">
+                        <span key={e} className="px-1.5 py-0.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-[9px] font-bold text-slate-500">
                           {e}
                         </span>
                       ))}
@@ -443,7 +484,7 @@ const StudentPractice = () => {
                   </div>
 
                   {/* Navigation and check buttons */}
-                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-750 pt-5 gap-2">
+                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-700 pt-5 gap-2">
                     <button
                       disabled={currentIndex === 0}
                       onClick={() => setCurrentIndex(currentIndex - 1)}
@@ -501,7 +542,7 @@ const StudentPractice = () => {
               {/* Right Panel: Question Palette */}
               <div className="md:col-span-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-3xl p-5 shadow-sm flex flex-col justify-between">
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-4 border-b border-slate-100 dark:border-slate-750 pb-2">
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-4 border-b border-slate-100 dark:border-slate-700 pb-2">
                     Question Palette
                   </h3>
                   
@@ -516,7 +557,7 @@ const StudentPractice = () => {
                       if (q.difficulty === 'Medium') dotColor = '🟡';
                       if (q.difficulty === 'Hard') dotColor = '🔴';
 
-                      let btnStyle = 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-450 hover:bg-slate-50 dark:hover:bg-slate-900';
+                      let btnStyle = 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900';
                       if (isVisited) btnStyle = 'bg-slate-100 dark:bg-slate-900 border-primary-300 text-primary-500';
                       if (isActive) btnStyle = 'bg-primary-500 border-primary-500 text-white shadow-md shadow-primary-500/10 scale-105';
                       if (isQRevealed) {
@@ -540,7 +581,7 @@ const StudentPractice = () => {
                 </div>
 
                 {/* Info legend */}
-                <div className="border-t border-slate-100 dark:border-slate-750 pt-4 mt-6 text-[10px] text-slate-400 space-y-1.5">
+                <div className="border-t border-slate-100 dark:border-slate-700 pt-4 mt-6 text-[10px] text-slate-400 space-y-1.5">
                   <div className="flex items-center gap-2">🟢 <span className="font-semibold text-slate-600 dark:text-slate-400">Easy Question</span></div>
                   <div className="flex items-center gap-2">🟡 <span className="font-semibold text-slate-600 dark:text-slate-400">Medium Question</span></div>
                   <div className="flex items-center gap-2">🔴 <span className="font-semibold text-slate-600 dark:text-slate-400">Hard / Important</span></div>

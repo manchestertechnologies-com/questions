@@ -1,6 +1,13 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
+const SessionTokenSchema = new mongoose.Schema({
+  token: { type: String },
+  createdAt: { type: Date, default: Date.now },
+  ipAddress: { type: String, default: '' },
+  userAgent: { type: String, default: '' },
+}, { _id: false });
+
 const UserSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -27,6 +34,22 @@ const UserSchema = new mongoose.Schema({
     type: String,
     enum: ['admin', 'student'],
     default: 'student',
+  },
+  isActive: {
+    type: Boolean,
+    default: true,
+  },
+  lastLoginAt: {
+    type: Date,
+    default: null,
+  },
+  loginCount: {
+    type: Number,
+    default: 0,
+  },
+  sessionTokens: {
+    type: [SessionTokenSchema],
+    default: [],
   },
   createdDate: {
     type: Date,

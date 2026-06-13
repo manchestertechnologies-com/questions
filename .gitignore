@@ -8,6 +8,9 @@ jspm_packages/
 .env.development.local
 .env.test.local
 .env.production.local
+# Keep .env.development and .env.production out of git (set vars in Vercel/Railway dashboards)
+.env.development
+.env.production
 
 # Build outputs
 dist/

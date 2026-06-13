@@ -131,7 +131,7 @@ const Login = () => {
           <p className="text-slate-400 dark:text-slate-500 text-xs">
             Default Admin credentials pre-seeded in code.
           </p>
-          <div className="mt-2 text-left bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-900 rounded-xl p-3 text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
+          <div className="mt-2 text-left bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl p-3 text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
             <p><strong>Admin Email:</strong> ManchesterTECHNOLOGIESS@gmail.com</p>
             <p><strong>Admin Password:</strong> MANTECH</p>
           </div>

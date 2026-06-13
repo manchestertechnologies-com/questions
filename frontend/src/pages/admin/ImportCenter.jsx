@@ -11,6 +11,49 @@ import {
   Trash2
 } from 'lucide-react';
 
+const ImageReviewSlot = ({ label, imageUrl, onUpload, onDelete, loading }) => {
+  return (
+    <div className="space-y-1">
+      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">{label}</label>
+      {imageUrl ? (
+        <div className="relative group border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-900/30 p-2 flex items-center justify-between gap-2 max-w-[240px]">
+          <img 
+            src={imageUrl.startsWith('/') ? `http://localhost:5000${imageUrl}` : imageUrl} 
+            alt={label} 
+            className="h-12 w-20 object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-white"
+          />
+          <button
+            type="button"
+            onClick={onDelete}
+            className="px-2 py-1 bg-danger-50 hover:bg-danger-100 text-danger-600 rounded-lg text-[10px] font-bold cursor-pointer transition-all active:scale-[0.98]"
+          >
+            Remove
+          </button>
+        </div>
+      ) : (
+        <label className="border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 rounded-xl p-2 flex flex-col items-center justify-center cursor-pointer hover:border-primary-400 transition-all max-w-[200px]">
+          {loading ? (
+            <Loader2 className="animate-spin text-primary-500" size={14} />
+          ) : (
+            <span className="text-[10px] font-bold text-primary-500">+ Add {label}</span>
+          )}
+          <input 
+            type="file" 
+            accept="image/*"
+            className="hidden" 
+            disabled={loading}
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                onUpload(e.target.files[0]);
+              }
+            }} 
+          />
+        </label>
+      )}
+    </div>
+  );
+};
+
 const ImportCenter = () => {
   // Selections state
   const [classNum, setClassNum] = useState('11');
@@ -37,6 +80,11 @@ const ImportCenter = () => {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+
+  // Review screen states
+  const [parsedQuestions, setParsedQuestions] = useState([]);
+  const [reviewMode, setReviewMode] = useState(false);
+  const [loadingField, setLoadingField] = useState(null); // format: `${qIdx}_${fieldName}`
 
   // Load subjects on mount or classNum change
   useEffect(() => {
@@ -171,8 +219,8 @@ const ImportCenter = () => {
       setErrorMessage('Please select a file to import.');
       return;
     }
-    if (!selectedSubject || !selectedChapter || !selectedConcept || !selectedSubConcept) {
-      setErrorMessage('Please select Subject, Chapter, Concept, and Sub-concept before importing.');
+    if (!selectedSubject || !selectedChapter || !selectedConcept) {
+      setErrorMessage('Please select Subject, Chapter, and Concept before importing.');
       return;
     }
 
@@ -182,33 +230,420 @@ const ImportCenter = () => {
 
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('subject', selectedSubject);
-    formData.append('chapter', selectedChapter);
-    formData.append('concept', selectedConcept);
-    formData.append('subConcept', selectedSubConcept);
-    formData.append('classNum', classNum);
-    formData.append('difficulty', difficulty);
-    formData.append('marks', marks);
-    formData.append('negativeMarks', negativeMarks);
-    examTypes.forEach(t => formData.append('examType', t));
 
     try {
-      const res = await API.post('/questions/import', formData, {
+      const res = await API.post('/questions/parse-import', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       });
       if (res.data.success) {
-        setStatusMessage(`Successfully preloaded ${res.data.count} questions from "${file.name}"!`);
-        setFile(null);
+        setParsedQuestions(res.data.questions);
+        setReviewMode(true);
+        setStatusMessage(`Successfully parsed ${res.data.questions.length} questions. Please review them below.`);
       }
     } catch (err) {
       console.error(err);
-      setErrorMessage(err.response?.data?.error || 'Failed to import questions. Please check document structure.');
+      setErrorMessage(err.response?.data?.error || 'Failed to parse questions. Please check document structure.');
     } finally {
       setLoading(false);
     }
   };
+
+  const handleUpdateQuestionField = (index, field, value) => {
+    setParsedQuestions(prev => prev.map((q, idx) => idx === index ? { ...q, [field]: value } : q));
+  };
+
+  const handleUpdateOptionField = (index, optionKey, value) => {
+    setParsedQuestions(prev => prev.map((q, idx) => {
+      if (idx === index) {
+        return {
+          ...q,
+          options: {
+            ...q.options,
+            [optionKey]: {
+              ...q.options[optionKey],
+              text: value
+            }
+          }
+        };
+      }
+      return q;
+    }));
+  };
+
+  const handleUploadTempSlot = async (index, fieldName, file) => {
+    const fieldKey = `${index}_${fieldName}`;
+    setLoadingField(fieldKey);
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+      const res = await API.post('/questions/temp-upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success) {
+        setParsedQuestions(prev => prev.map((q, idx) => {
+          if (idx === index) {
+            const updated = { ...q, [fieldName]: res.data.url };
+            if (fieldName === 'optionAImage') updated.options.A.image = res.data.url;
+            if (fieldName === 'optionBImage') updated.options.B.image = res.data.url;
+            if (fieldName === 'optionCImage') updated.options.C.image = res.data.url;
+            if (fieldName === 'optionDImage') updated.options.D.image = res.data.url;
+            return updated;
+          }
+          return q;
+        }));
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to upload image');
+    } finally {
+      setLoadingField(null);
+    }
+  };
+
+  const handleDeleteTempSlot = (index, fieldName) => {
+    setParsedQuestions(prev => prev.map((q, idx) => {
+      if (idx === index) {
+        const updated = { ...q, [fieldName]: null };
+        if (fieldName === 'optionAImage') updated.options.A.image = null;
+        if (fieldName === 'optionBImage') updated.options.B.image = null;
+        if (fieldName === 'optionCImage') updated.options.C.image = null;
+        if (fieldName === 'optionDImage') updated.options.D.image = null;
+        return updated;
+      }
+      return q;
+    }));
+  };
+
+  const handleBulkSave = async () => {
+    if (parsedQuestions.length === 0) return;
+    setLoading(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      const res = await API.post('/questions/bulk-save', {
+        questions: parsedQuestions,
+        subject: selectedSubject,
+        chapter: selectedChapter,
+        concept: selectedConcept,
+        subConcept: selectedSubConcept || null,
+        classNum,
+        examType: examTypes,
+        difficulty,
+        marks,
+        negativeMarks
+      });
+      if (res.data.success) {
+        setStatusMessage(`Successfully imported and saved ${res.data.count} questions to the database!`);
+        setParsedQuestions([]);
+        setReviewMode(false);
+        setFile(null);
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMessage(err.response?.data?.error || 'Failed to save questions to database.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (reviewMode) {
+    return (
+      <div className="flex-1 p-6 space-y-6 max-w-7xl mx-auto w-full">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+          <div className="space-y-1">
+            <button
+              onClick={() => setReviewMode(false)}
+              className="text-xs text-primary-500 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              ← Back to Upload
+            </button>
+            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white font-display">
+              Interactive Import Review
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
+              Verify questions, correct layout issues, and add drawings/diagrams to slot placements.
+            </p>
+          </div>
+          <button
+            onClick={handleBulkSave}
+            disabled={loading || parsedQuestions.length === 0}
+            className="px-6 py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 text-white font-bold rounded-xl text-sm shadow-lg shadow-primary-500/25 flex items-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="animate-spin" size={16} /> Saving to Database...
+              </>
+            ) : (
+              `Bulk Save ${parsedQuestions.length} Questions`
+            )}
+          </button>
+        </div>
+
+        {/* Notifications */}
+        {errorMessage && (
+          <div className="p-4 bg-danger-50 dark:bg-danger-950/20 border border-danger-200 dark:border-danger-900/30 rounded-2xl flex items-start gap-3">
+            <AlertCircle size={20} className="text-danger-500 shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-danger-800 dark:text-danger-400">Save Failed</p>
+              <p className="text-xs text-danger-600 dark:text-danger-500 mt-0.5">{errorMessage}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Questions review list */}
+          <div className="lg:col-span-3 space-y-6">
+            {parsedQuestions.map((q, qIdx) => (
+              <div 
+                key={qIdx} 
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-3xl p-6 space-y-5 shadow-sm relative"
+              >
+                {/* Badge Header */}
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-slate-800 dark:text-slate-200">
+                      #{qIdx + 1}
+                    </span>
+                    <input 
+                      type="number"
+                      value={q.questionNumber}
+                      onChange={(e) => handleUpdateQuestionField(qIdx, 'questionNumber', e.target.value)}
+                      className="w-16 px-2 py-0.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 font-bold focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      title="Question Number"
+                    />
+                    <input 
+                      type="text"
+                      value={q.title}
+                      onChange={(e) => handleUpdateQuestionField(qIdx, 'title', e.target.value)}
+                      className="px-2 py-0.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 font-semibold focus:outline-none focus:ring-1 focus:ring-primary-500 max-w-[200px]"
+                      placeholder="Question Title"
+                      title="Question Title"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* Question Type Selection */}
+                    <select
+                      value={q.questionType || 'MCQ'}
+                      onChange={(e) => handleUpdateQuestionField(qIdx, 'questionType', e.target.value)}
+                      className="px-2 py-0.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 focus:outline-none"
+                    >
+                      <option value="MCQ">MCQ</option>
+                      <option value="Numerical">Numerical</option>
+                      <option value="Subjective">Subjective</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => setParsedQuestions(prev => prev.filter((_, idx) => idx !== qIdx))}
+                      className="text-xs text-danger-500 font-semibold hover:text-danger-600 cursor-pointer"
+                    >
+                      Discard
+                    </button>
+                  </div>
+                </div>
+
+                {/* Text editor fields */}
+                <div className="space-y-4">
+                  {/* Question Text */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Question Text</label>
+                    <textarea
+                      value={q.questionText}
+                      onChange={(e) => handleUpdateQuestionField(qIdx, 'questionText', e.target.value)}
+                      rows={2}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 dark:text-slate-200"
+                    />
+                  </div>
+
+                  {/* Question Image */}
+                  <ImageReviewSlot
+                    label="Question Image"
+                    imageUrl={q.questionImage}
+                    onUpload={(file) => handleUploadTempSlot(qIdx, 'questionImage', file)}
+                    onDelete={() => handleDeleteTempSlot(qIdx, 'questionImage')}
+                    loading={loadingField === `${qIdx}_questionImage`}
+                  />
+
+                  {/* MCQ Options Grid */}
+                  {(q.questionType === 'MCQ' || !q.questionType) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {['A', 'B', 'C', 'D'].map(key => (
+                        <div key={key} className="space-y-2 border border-slate-100 dark:border-slate-800/80 p-3 rounded-2xl bg-slate-50/10">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Option {key}</label>
+                            <input
+                              type="text"
+                              value={q.options[key]?.text || ''}
+                              onChange={(e) => handleUpdateOptionField(qIdx, key, e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 dark:text-slate-200"
+                            />
+                          </div>
+                          <ImageReviewSlot
+                            label={`Option ${key} Image`}
+                            imageUrl={q[`option${key}Image`]}
+                            onUpload={(file) => handleUploadTempSlot(qIdx, `option${key}Image`, file)}
+                            onDelete={() => handleDeleteTempSlot(qIdx, `option${key}Image`)}
+                            loading={loadingField === `${qIdx}_option${key}Image`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Correct Option Selection & Solution Explanation */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    {(q.questionType === 'MCQ' || !q.questionType) && (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Correct Option</label>
+                        <select
+                          value={q.correctAnswer}
+                          onChange={(e) => handleUpdateQuestionField(qIdx, 'correctAnswer', e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 dark:text-slate-200"
+                        >
+                          <option value="A">Option A</option>
+                          <option value="B">Option B</option>
+                          <option value="C">Option C</option>
+                          <option value="D">Option D</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Explanation Solution */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Solution / Explanation</label>
+                    <textarea
+                      value={q.explanation}
+                      onChange={(e) => handleUpdateQuestionField(qIdx, 'explanation', e.target.value)}
+                      rows={2}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 dark:text-slate-200"
+                    />
+                  </div>
+
+                  {/* Solution Image */}
+                  <ImageReviewSlot
+                    label="Solution Image"
+                    imageUrl={q.solutionImage}
+                    onUpload={(file) => handleUploadTempSlot(qIdx, 'solutionImage', file)}
+                    onDelete={() => handleDeleteTempSlot(qIdx, 'solutionImage')}
+                    loading={loadingField === `${qIdx}_solutionImage`}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Quick info sidebar */}
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-2xl p-5 shadow-sm text-sm space-y-4">
+              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-700/50 pb-2">
+                Mapping Destination
+              </h3>
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="text-slate-400 block font-semibold">Subject</label>
+                  <p className="text-slate-700 dark:text-slate-200 font-bold">
+                    {subjects.find(s => s._id === selectedSubject)?.name || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-slate-400 block font-semibold">Chapter</label>
+                  <p className="text-slate-700 dark:text-slate-200">
+                    {chapters.find(c => c._id === selectedChapter)?.name || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-slate-400 block font-semibold">Concept (Topic)</label>
+                  <p className="text-slate-700 dark:text-slate-200">
+                    {concepts.find(c => c._id === selectedConcept)?.name || 'N/A'}
+                  </p>
+                </div>
+                {selectedSubConcept && (
+                  <div>
+                    <label className="text-slate-400 block font-semibold">Sub-Concept</label>
+                    <p className="text-slate-700 dark:text-slate-200">
+                      {subConcepts.find(s => s._id === selectedSubConcept)?.name || 'N/A'}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <label className="text-slate-400 block font-semibold">Class Level</label>
+                  <p className="text-slate-700 dark:text-slate-200 font-bold">Class {classNum}</p>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 dark:border-slate-700 pt-4 space-y-3">
+                <h4 className="font-bold text-xs text-slate-800 dark:text-slate-300">Bulk Settings Modifiers</h4>
+                
+                {/* Difficulty */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Difficulty</label>
+                  <select 
+                    value={difficulty} 
+                    onChange={(e) => setDifficulty(e.target.value)}
+                    className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-200"
+                  >
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard / Important</option>
+                  </select>
+                </div>
+
+                {/* Marks */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Marks</label>
+                    <input 
+                      type="number" 
+                      value={marks} 
+                      onChange={(e) => setMarks(e.target.value)}
+                      className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-200"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Neg Marks</label>
+                    <input 
+                      type="number" 
+                      value={negativeMarks} 
+                      onChange={(e) => setNegativeMarks(e.target.value)}
+                      className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-200"
+                    />
+                  </div>
+                </div>
+
+                {/* Target Exams */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Target Exams</label>
+                  <div className="flex flex-wrap gap-1">
+                    {['JEE', 'NEET', 'KCET', 'Board'].map(type => {
+                      const active = examTypes.includes(type);
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => toggleExamType(type)}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border active:scale-[0.98] transition-all cursor-pointer ${
+                            active
+                              ? 'bg-primary-500 border-primary-500 text-white'
+                              : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500'
+                          }`}
+                        >
+                          {type}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 p-6 space-y-6 max-w-5xl mx-auto w-full">
@@ -296,12 +731,11 @@ const ImportCenter = () => {
 
               {/* Sub-Concept Selection */}
               <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Sub Concept</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Sub Concept (Optional)</label>
                 <select 
                   value={selectedSubConcept} 
                   onChange={(e) => setSelectedSubConcept(e.target.value)}
-                  required
-                  disabled={!selectedConcept}
+                  disabled={!selectedConcept || subConcepts.length === 0}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 dark:text-slate-200 disabled:opacity-50"
                 >
                   <option value="">Select Sub-Concept</option>
@@ -455,7 +889,7 @@ const ImportCenter = () => {
               <CheckCircle size={20} className="text-success-500 shrink-0" />
               <div>
                 <p className="text-sm font-bold text-success-800 dark:text-success-400">Success</p>
-                <p className="text-xs text-success-600 dark:text-success-500 mt-0.5">{statusMessage}</p>
+                <p className="text-xs text-success-600 dark:text-danger-500 mt-0.5">{statusMessage}</p>
               </div>
             </div>
           )}
@@ -468,10 +902,10 @@ const ImportCenter = () => {
           >
             {loading ? (
               <>
-                <Loader2 className="animate-spin" size={18} /> Processing and preloading questions...
+                <Loader2 className="animate-spin" size={18} /> Processing and parsing questions...
               </>
             ) : (
-              'Parse and Preload Questions'
+              'Parse and Review Questions'
             )}
           </button>
         </form>
