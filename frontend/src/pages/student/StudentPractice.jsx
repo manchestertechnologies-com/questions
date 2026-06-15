@@ -475,7 +475,14 @@ const StudentPractice = () => {
                                 {key}
                               </span>
                               <div className="text-sm font-semibold leading-relaxed">
-                                {renderTextWithSlots(opt.text, `option${key}`)}
+                                {opt?.image && (
+                                  <img 
+                                    src={opt.image.startsWith('/') ? `${backendUrl}${opt.image}` : opt.image} 
+                                    alt={`Option ${key}`} 
+                                    className="max-h-24 mb-1.5 rounded-lg object-contain bg-white border border-slate-200 dark:border-slate-800" 
+                                  />
+                                )}
+                                {opt?.text && renderTextWithSlots(opt.text, `option${key}`)}
                               </div>
                             </div>
 

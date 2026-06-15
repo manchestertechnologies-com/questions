@@ -524,7 +524,8 @@ const ImportCenter = () => {
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to upload image');
+      const errMsg = err.response?.data?.error || err.message || 'Failed to upload image';
+      alert(errMsg);
     } finally {
       setLoadingField(null);
     }
@@ -592,7 +593,8 @@ const ImportCenter = () => {
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to upload slot image');
+      const errMsg = err.response?.data?.error || err.message || 'Failed to upload slot image';
+      alert(errMsg);
     } finally {
       setLoadingField(null);
     }

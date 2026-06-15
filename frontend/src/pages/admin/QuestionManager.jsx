@@ -310,7 +310,11 @@ const QuestionManager = () => {
         setEditForm(f => ({ ...f, [fieldName]: res.data.url }));
         showToast('Image uploaded!');
       }
-    } catch { showToast('Image upload failed', 'error'); }
+    } catch (err) {
+      console.error(err);
+      const errMsg = err.response?.data?.error || err.message || 'Image upload failed';
+      showToast(errMsg, 'error');
+    }
     finally { setLoadingField(null); }
   };
 
@@ -335,7 +339,11 @@ const QuestionManager = () => {
     try {
       const res = await API.post('/questions/temp-upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       if (res.data.success) setCreateForm(f => ({ ...f, [fieldName]: res.data.url }));
-    } catch { showToast('Upload failed', 'error'); }
+    } catch (err) {
+      console.error(err);
+      const errMsg = err.response?.data?.error || err.message || 'Upload failed';
+      showToast(errMsg, 'error');
+    }
     finally { setLoadingField(null); }
   };
 
@@ -522,7 +530,11 @@ const QuestionManager = () => {
                             showToast('Slot image uploaded!');
                           }
                         }
-                      } catch { showToast('Image upload failed', 'error'); }
+                      } catch (err) {
+                        console.error(err);
+                        const errMsg = err.response?.data?.error || err.message || 'Image upload failed';
+                        showToast(errMsg, 'error');
+                      }
                       finally { setLoadingField(null); }
                     }
                   }} 
