@@ -1277,7 +1277,7 @@ const ImportCenter = () => {
                 <textarea
                   value={pastedJson}
                   onChange={(e) => setPastedJson(e.target.value)}
-                  placeholder={`Paste structured JSON or raw question text here.\n\nJSON Example:\n[\n  {\n    "questionNumber": 1,\n    "questionText": "A block of mass 2kg is placed on...",\n    "options": {\n      "A": "10 m/s²",\n      "B": "5 m/s²"\n    },\n    "correctAnswer": "B"\n  }\n]\n\nRaw Text Example:\nQuestion 1\nWhat is the capital of India?\nA) Mumbai\nB) Delhi\nCorrect: B`}
+                  placeholder={`Paste structured JSON or raw question text here.\n\nJSON Example (with image slot):\n[\n  {\n    "questionNumber": 1,\n    "questionText": "Find the current in the circuit [[IMAGE SLOT]]",\n    "options": {\n      "A": "10 m/s²",\n      "B": "5 m/s²"\n    },\n    "correctAnswer": "B",\n    "explanation": "Apply Ohm's law to the loop [[IMAGE SLOT]]"\n  }\n]\n\nRaw Text Example (with image slot):\nQuestion 1\nFind the value of x in the diagram.\n[[IMAGE SLOT]]\nA) 2A\nB) 4A\nCorrect: B`}
                   rows={8}
                   className="w-full p-4 bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-[11px] font-mono text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-slate-400 dark:placeholder-slate-700 leading-normal"
                 />
@@ -1350,13 +1350,13 @@ Explanation: Apply Kirchhoff's law...`}
             </h3>
             <ul className="list-disc pl-4 space-y-2 text-xs text-slate-500 dark:text-slate-400">
               <li>
-                Insert <code className="bg-slate-100 dark:bg-slate-900 px-1 py-0.5 rounded text-primary-500 font-semibold font-mono">[[IMG_SLOT]]</code> inside your Word files wherever an image, graph, diagram, or circuit exists.
+                Insert <code className="bg-slate-100 dark:bg-slate-900 px-1 py-0.5 rounded text-primary-500 font-semibold font-mono">[[IMAGE SLOT]]</code> inside your Word documents or JSON question fields wherever an image, diagram, or circuit exists.
               </li>
               <li>
-                The system detects placeholders and auto-generates upload slots.
+                The system automatically scans and registers placeholders to generate inline upload slots.
               </li>
               <li>
-                Once imported, you can upload the drawings/diagrams for each question in the Question Manager list.
+                Once imported, you can easily click each inline placeholder badge to upload, preview, and update diagrams.
               </li>
             </ul>
           </div>
