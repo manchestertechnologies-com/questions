@@ -18,7 +18,8 @@ const connectDB = async () => {
     return conn;
   } catch (error) {
     console.error(`Database Connection Error: ${error.message}`);
-    process.exit(1);
+    // Return null instead of crashing the process so other parts (like local upload routing) can be tested
+    return null;
   }
 };
 

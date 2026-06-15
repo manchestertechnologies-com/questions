@@ -605,20 +605,56 @@ const QuickAddPage = () => {
           </div>
 
           {/* Question Preview */}
-          {showPreview && form.questionText && (
-            <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 animate-fade-in">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Preview</h3>
-              <p className="text-slate-800 dark:text-slate-200 text-sm leading-relaxed mb-4">{form.questionText}</p>
-              {['A', 'B', 'C', 'D'].map(opt => form[`option${opt}`] && (
-                <div key={opt} className={`question-option mb-2 ${form.correctAnswer === opt ? 'correct' : ''}`}>
-                  <span className={`option-badge ${form.correctAnswer === opt ? 'correct' : ''}`}>{opt}</span>
-                  <span className="text-sm text-slate-700 dark:text-slate-300">{form[`option${opt}`]}</span>
-                </div>
-              ))}
-              {form.explanation && (
-                <div className="mt-3 p-3 bg-primary-50 dark:bg-primary-950/20 border border-primary-200 dark:border-primary-800/40 rounded-xl">
-                  <p className="text-xs font-bold text-primary-600 dark:text-primary-400 mb-1">Explanation</p>
-                  <p className="text-sm text-slate-700 dark:text-slate-300">{form.explanation}</p>
+          {showPreview && (form.questionText || form.questionImage || ['A','B','C','D'].some(o => form[`option${o}`] || form[`option${o}Image`])) && (
+            <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 animate-fade-in space-y-4">
+              <div>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Question Preview</h3>
+                {form.questionImage && (
+                  <img 
+                    src={form.questionImage.startsWith('/') ? `${backendUrl}${form.questionImage}` : form.questionImage} 
+                    alt="Question" 
+                    className="max-h-48 rounded-xl mb-3 border border-slate-200 dark:border-slate-800 object-contain bg-white" 
+                  />
+                )}
+                {form.questionText && <p className="text-slate-800 dark:text-slate-200 text-sm leading-relaxed">{form.questionText}</p>}
+              </div>
+
+              {/* Options */}
+              <div className="space-y-2">
+                {['A', 'B', 'C', 'D'].map(opt => {
+                  const text = form[`option${opt}`];
+                  const img = form[`option${opt}Image`];
+                  if (!text && !img) return null;
+                  return (
+                    <div key={opt} className={`question-option flex gap-2.5 items-start p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 ${form.correctAnswer === opt ? 'correct border-emerald-500' : ''}`}>
+                      <span className={`option-badge ${form.correctAnswer === opt ? 'correct bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>{opt}</span>
+                      <div className="flex-1 min-w-0">
+                        {img && (
+                          <img 
+                            src={img.startsWith('/') ? `${backendUrl}${img}` : img} 
+                            alt={`Option ${opt}`} 
+                            className="h-14 mb-1.5 rounded-lg object-contain border border-slate-200 dark:border-slate-800 bg-white" 
+                          />
+                        )}
+                        {text && <p className="text-sm text-slate-700 dark:text-slate-300 break-words">{text}</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Explanation */}
+              {(form.explanation || form.solutionImage) && (
+                <div className="p-4 bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-800/40 rounded-xl space-y-2">
+                  <p className="text-xs font-bold text-sky-600 dark:text-sky-400">Explanation</p>
+                  {form.solutionImage && (
+                    <img 
+                      src={form.solutionImage.startsWith('/') ? `${backendUrl}${form.solutionImage}` : form.solutionImage} 
+                      alt="Solution" 
+                      className="max-h-40 rounded-lg object-contain border border-slate-200 dark:border-slate-800 bg-white" 
+                    />
+                  )}
+                  {form.explanation && <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{form.explanation}</p>}
                 </div>
               )}
             </div>
