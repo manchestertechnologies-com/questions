@@ -9,9 +9,11 @@ const connectDB = async () => {
     }
     
     mongoose.set('strictQuery', false);
+    mongoose.set('bufferCommands', false); // Disable command buffering to prevent hanging requests when DB is disconnected
     const conn = await mongoose.connect(connString, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
+      bufferCommands: false,
     });
     
     console.log(`MongoDB Connected: ${conn.connection.host}`);

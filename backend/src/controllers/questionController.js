@@ -25,9 +25,15 @@ const uploadImageFile = async (file) => {
   if (isCloudinaryConfigured) {
     try {
       return await new Promise((resolve) => {
+        const timeoutId = setTimeout(() => {
+          console.warn('Cloudinary upload timed out (3s limit), falling back to local/base64 storage.');
+          resolve(fallbackUpload(file));
+        }, 3000);
+
         const uploadStream = cloudinary.uploader.upload_stream(
           { folder: 'manchester_questions' },
           (error, result) => {
+            clearTimeout(timeoutId);
             if (error) {
               console.error('Cloudinary stream upload error:', error);
               resolve(fallbackUpload(file));
