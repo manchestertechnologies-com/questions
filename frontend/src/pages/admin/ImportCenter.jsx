@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import API from '../../services/api';
+import API, { getBackendUrl } from '../../services/api';
+
+const backendUrl = getBackendUrl();
 import { 
   Upload, 
   File, 
@@ -18,7 +20,7 @@ const ImageReviewSlot = ({ label, imageUrl, onUpload, onDelete, loading }) => {
       {imageUrl ? (
         <div className="relative group border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-900/30 p-2 flex items-center justify-between gap-2 max-w-[240px]">
           <img 
-            src={imageUrl.startsWith('/') ? `http://localhost:5000${imageUrl}` : imageUrl} 
+            src={imageUrl.startsWith('/') ? `${backendUrl}${imageUrl}` : imageUrl} 
             alt={label} 
             className="h-12 w-20 object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-white"
           />
@@ -640,7 +642,7 @@ const ImportCenter = () => {
             {imageUrl ? (
               <div className="relative group inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white p-1 max-w-[200px]">
                 <img 
-                  src={imageUrl.startsWith('/') ? `http://localhost:5000${imageUrl}` : imageUrl} 
+                  src={imageUrl.startsWith('/') ? `${backendUrl}${imageUrl}` : imageUrl} 
                   alt={slotId} 
                   className="h-8 w-12 object-contain rounded border bg-white"
                 />

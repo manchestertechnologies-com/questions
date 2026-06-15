@@ -16,25 +16,57 @@ const { parseJsonQuestions } = require('../utils/jsonParser');
 const { parseRawQuestionText } = require('../utils/questionTextParser');
 
 // ─── Image Upload Helper ──────────────────────────────────────────────────────
-const uploadImageFile = async (filePath) => {
+const uploadImageFile = async (file) => {
   const isCloudinaryConfigured =
     process.env.CLOUDINARY_CLOUD_NAME &&
     process.env.CLOUDINARY_API_KEY &&
     process.env.CLOUDINARY_API_SECRET;
 
-  if (!isCloudinaryConfigured) {
-    const fileName = path.basename(filePath);
-    return { url: `/uploads/${fileName}`, publicId: null };
+  if (isCloudinaryConfigured) {
+    try {
+      return await new Promise((resolve) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { folder: 'manchester_questions' },
+          (error, result) => {
+            if (error) {
+              console.error('Cloudinary stream upload error:', error);
+              resolve(fallbackUpload(file));
+            } else {
+              resolve({ url: result.secure_url, publicId: result.public_id });
+            }
+          }
+        );
+        uploadStream.end(file.buffer);
+      });
+    } catch (err) {
+      console.error('Cloudinary stream upload catch error:', err);
+      return fallbackUpload(file);
+    }
   }
 
+  return fallbackUpload(file);
+};
+
+const fallbackUpload = (file) => {
+  const uploadDir = path.join(__dirname, '../../uploads');
+  const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+  const ext = path.extname(file.originalname).toLowerCase();
+  const fileName = `${file.fieldname}-${uniqueSuffix}${ext}`;
+  const filePath = path.join(uploadDir, fileName);
+
   try {
-    const result = await cloudinary.uploader.upload(filePath, { folder: 'manchester_questions' });
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    return { url: result.secure_url, publicId: result.public_id };
-  } catch (error) {
-    console.error('Cloudinary upload error:', error);
-    const fileName = path.basename(filePath);
+    // Attempt local file write
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    fs.writeFileSync(filePath, file.buffer);
     return { url: `/uploads/${fileName}`, publicId: null };
+  } catch (err) {
+    // If local write fails (e.g. read-only filesystem on Vercel), fallback to base64 Data URI
+    console.warn('Local upload directory not writable, falling back to base64 Data URI:', err.message);
+    const base64Data = file.buffer.toString('base64');
+    const dataUri = `data:${file.mimetype};base64,${base64Data}`;
+    return { url: dataUri, publicId: null };
   }
 };
 
@@ -823,9 +855,10 @@ exports.bulkSaveQuestions = async (req, res) => {
 exports.uploadTempImage = async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'Please upload an image file' });
   try {
-    const uploadResult = await uploadImageFile(req.file.path);
+    const uploadResult = await uploadImageFile(req.file);
     res.status(200).json({ success: true, url: uploadResult.url });
   } catch (error) {
+    console.error('Temp upload error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };
@@ -847,7 +880,7 @@ exports.uploadSlotImage = async (req, res) => {
       return res.status(400).json({ success: false, error: `Image slot '${slotId}' does not exist` });
     }
 
-    const uploadResult = await uploadImageFile(req.file.path);
+    const uploadResult = await uploadImageFile(req.file);
     question.imageSlots[slotIndex].url = uploadResult.url;
 
     const slotIdMap = {
@@ -899,7 +932,7 @@ exports.updateImageField = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid image field name' });
     }
 
-    const uploadResult = await uploadImageFile(req.file.path);
+    const uploadResult = await uploadImageFile(req.file);
     question[fieldName] = uploadResult.url;
     if (fieldName === 'optionAImage') question.options.A.image = uploadResult.url;
     if (fieldName === 'optionBImage') question.options.B.image = uploadResult.url;

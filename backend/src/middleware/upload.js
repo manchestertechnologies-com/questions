@@ -49,7 +49,7 @@ const imageFileFilter = (req, file, cb) => {
 };
 
 const uploadImage = multer({
-  storage: imageStorage,
+  storage: multer.memoryStorage(),
   fileFilter: imageFileFilter,
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });

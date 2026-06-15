@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import API from '../../services/api';
+import API, { getBackendUrl } from '../../services/api';
+
+const backendUrl = getBackendUrl();
 import {
   Search, Filter, ChevronLeft, ChevronRight, Upload, Image as ImageIcon,
   Edit, CheckCircle, AlertCircle, X, FileText, Loader2, Trash2, Eye, EyeOff,
@@ -22,7 +24,7 @@ const ImageZoomModal = ({ src, onClose }) => (
 
 // ── Image Slot Component ──────────────────────────────────────────────────────
 const ImageSlot = ({ label, imageUrl, onUpload, onDelete, onZoom, loading }) => {
-  const fullUrl = imageUrl?.startsWith('/') ? `http://localhost:5000${imageUrl}` : imageUrl;
+  const fullUrl = imageUrl?.startsWith('/') ? `${backendUrl}${imageUrl}` : imageUrl;
   return (
     <div className="space-y-1.5">
       <label className="input-label">{label}</label>
@@ -386,7 +388,7 @@ const QuestionManager = () => {
     navigator.clipboard.writeText(id).then(() => showToast('Question ID copied!'));
   };
 
-  const imgUrl = (url) => url?.startsWith('/') ? `http://localhost:5000${url}` : url;
+  const imgUrl = (url) => url?.startsWith('/') ? `${backendUrl}${url}` : url;
 
   const renderTextWithSlots = (text, prefix) => {
     if (!text) return null;
@@ -460,7 +462,7 @@ const QuestionManager = () => {
             {imageUrl ? (
               <div className="relative group inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white p-1 max-w-[200px]">
                 <img 
-                  src={imageUrl.startsWith('/') ? `http://localhost:5000${imageUrl}` : imageUrl} 
+                  src={imageUrl.startsWith('/') ? `${backendUrl}${imageUrl}` : imageUrl} 
                   alt={slotId} 
                   className="h-8 w-12 object-contain rounded border bg-white cursor-zoom-in"
                   onClick={() => setZoomedImg(imgUrl(imageUrl))}

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import API from '../../services/api';
+import API, { getBackendUrl } from '../../services/api';
+
+const backendUrl = getBackendUrl();
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -205,7 +207,7 @@ const StudentPractice = () => {
               nextElements.push(
                 <span key={`${placeholder}_${p}`} className="block my-3">
                   <img 
-                    src={imgUrl.startsWith('/') ? `http://localhost:5000${imgUrl}` : imgUrl} 
+                    src={imgUrl.startsWith('/') ? `${backendUrl}${imgUrl}` : imgUrl} 
                     alt="inline asset" 
                     className="max-h-56 rounded-xl object-contain border border-slate-200 dark:border-slate-800 bg-white"
                   />
@@ -233,7 +235,7 @@ const StudentPractice = () => {
               finalElements.push(
                 <span key={`legacy_img_${p}`} className="block my-3">
                   <img 
-                    src={slot.url.startsWith('/') ? `http://localhost:5000${slot.url}` : slot.url} 
+                    src={slot.url.startsWith('/') ? `${backendUrl}${slot.url}` : slot.url} 
                     alt={slotId} 
                     className="max-h-56 rounded-xl object-contain border border-slate-200 dark:border-slate-800 bg-white"
                   />

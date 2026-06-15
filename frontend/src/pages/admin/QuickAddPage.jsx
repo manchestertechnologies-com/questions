@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import API from '../../services/api';
+import API, { getBackendUrl } from '../../services/api';
+
+const backendUrl = getBackendUrl();
 import {
   Zap, ChevronDown, CheckCircle, AlertCircle, Loader2, X, Eye,
   RotateCcw, Save, Plus, BookOpen, Keyboard, Copy, ChevronRight,
@@ -19,7 +21,7 @@ const QUESTION_TYPES = [
 ];
 
 const QuickAddImageSlot = ({ label, imageUrl, onUpload, onDelete, loading }) => {
-  const displayUrl = imageUrl?.startsWith('/') ? `http://localhost:5000${imageUrl}` : imageUrl;
+  const displayUrl = imageUrl?.startsWith('/') ? `${backendUrl}${imageUrl}` : imageUrl;
   return (
     <div className="space-y-1 my-2">
       <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">{label}</label>
