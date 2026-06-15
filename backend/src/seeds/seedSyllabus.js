@@ -15,11 +15,15 @@ const ncertSyllabus = require('./ncertData');
 const seedAll = async () => {
   try {
     // 1. Seed Admin User
-    const adminEmail = process.env.ADMIN_EMAIL || 'ManchesterTECHNOLOGIESS@gmail.com';
+    const adminEmail = process.env.ADMIN_EMAIL || 'manchestertechnologiess@gmail.com';
     const adminPassword = process.env.ADMIN_PASSWORD || 'MANTECH';
     
-    const adminExists = await User.findOne({ email: adminEmail.toLowerCase() });
-    if (!adminExists) {
+    let admin = await User.findOne({ role: 'admin' });
+    if (!admin) {
+      admin = await User.findOne({ email: adminEmail.toLowerCase() });
+    }
+    
+    if (!admin) {
       // Password will be automatically hashed by the User pre-save hook
       await User.create({
         name: 'Manchester Admin',
@@ -29,7 +33,11 @@ const seedAll = async () => {
       });
       console.log('Admin user account seeded successfully.');
     } else {
-      console.log('Admin user account already exists. Skipping user seed.');
+      admin.email = adminEmail;
+      admin.password = adminPassword; // User pre-save hook will hash it automatically
+      admin.role = 'admin';
+      await admin.save();
+      console.log('Admin user account credentials updated successfully.');
     }
 
     // 2. Check if syllabus data already exists

@@ -66,12 +66,13 @@ const logActivity = async (req, action, details, questionId = null, severity = '
 // ─── Sync image slots ─────────────────────────────────────────────────────────
 const syncImageSlots = (text, prefix, existingSlots) => {
   if (!text) return [];
-  const matches = text.match(/\[\[IMG_SLOT\]\]/g);
+  const matches = text.match(/\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi);
   const count = matches ? matches.length : 0;
   const slots = [];
+  const slotsArray = Array.isArray(existingSlots) ? existingSlots : [];
   for (let s = 0; s < count; s++) {
     const slotId = `${prefix}_${s}`;
-    const match = existingSlots.find(sl => sl.slotId === slotId);
+    const match = slotsArray.find(sl => sl.slotId === slotId);
     slots.push({ slotId, url: match ? match.url : null });
   }
   return slots;
@@ -99,12 +100,48 @@ exports.createQuestion = async (req, res) => {
     } = req.body;
 
     const slots = [];
+    const addCustomSlots = (text, prefix) => {
+      if (!text) return;
+      const matches = text.match(/\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi);
+      const count = matches ? matches.length : 0;
+      for (let s = 0; s < count; s++) {
+        const slotId = `${prefix}_${s}`;
+        let url = null;
+        if (slotId === 'questionText_0') url = questionImage;
+        if (slotId === 'optionA_0') url = optionAImage;
+        if (slotId === 'optionB_0') url = optionBImage;
+        if (slotId === 'optionC_0') url = optionCImage;
+        if (slotId === 'optionD_0') url = optionDImage;
+        if (slotId === 'explanation_0') url = solutionImage;
+        slots.push({ slotId, url });
+      }
+    };
+
     if (questionImage) slots.push({ slotId: 'questionText_0', url: questionImage });
     if (optionAImage)  slots.push({ slotId: 'optionA_0', url: optionAImage });
     if (optionBImage)  slots.push({ slotId: 'optionB_0', url: optionBImage });
     if (optionCImage)  slots.push({ slotId: 'optionC_0', url: optionCImage });
     if (optionDImage)  slots.push({ slotId: 'optionD_0', url: optionDImage });
     if (solutionImage) slots.push({ slotId: 'explanation_0', url: solutionImage });
+
+    addCustomSlots(questionText, 'questionText');
+    addCustomSlots(optionA, 'optionA');
+    addCustomSlots(optionB, 'optionB');
+    addCustomSlots(optionC, 'optionC');
+    addCustomSlots(optionD, 'optionD');
+    addCustomSlots(explanation, 'explanation');
+
+    const uniqueSlots = [];
+    slots.forEach(s => {
+      const existingIdx = uniqueSlots.findIndex(x => x.slotId === s.slotId);
+      if (existingIdx !== -1) {
+        if (!uniqueSlots[existingIdx].url && s.url) {
+          uniqueSlots[existingIdx].url = s.url;
+        }
+      } else {
+        uniqueSlots.push(s);
+      }
+    });
 
     const question = await Question.create({
       questionNumber: parseInt(questionNumber, 10),
@@ -125,7 +162,7 @@ exports.createQuestion = async (req, res) => {
       optionCImage: optionCImage || null,
       optionDImage: optionDImage || null,
       solutionImage: solutionImage || null,
-      imageSlots: slots,
+      imageSlots: uniqueSlots,
       subject, chapter, concept,
       subConcept: subConcept || null,
       classNum: classNum ? parseInt(classNum, 10) : null,
@@ -371,15 +408,39 @@ exports.updateQuestion = async (req, res) => {
 
     // Rebuild imageSlots
     const slots = [];
+    const addCustomSlots = (text, prefix) => {
+      if (!text) return;
+      const matches = text.match(/\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi);
+      const count = matches ? matches.length : 0;
+      for (let s = 0; s < count; s++) {
+        const slotId = `${prefix}_${s}`;
+        const existing = question.imageSlots?.find(sl => sl.slotId === slotId);
+        slots.push({ slotId, url: existing ? existing.url : null });
+      }
+    };
+
     if (question.questionImage) slots.push({ slotId: 'questionText_0', url: question.questionImage });
     if (question.optionAImage)  slots.push({ slotId: 'optionA_0', url: question.optionAImage });
     if (question.optionBImage)  slots.push({ slotId: 'optionB_0', url: question.optionBImage });
     if (question.optionCImage)  slots.push({ slotId: 'optionC_0', url: question.optionCImage });
     if (question.optionDImage)  slots.push({ slotId: 'optionD_0', url: question.optionDImage });
     if (question.solutionImage) slots.push({ slotId: 'explanation_0', url: question.solutionImage });
+
     const standardKeys = ['questionText_0', 'optionA_0', 'optionB_0', 'optionC_0', 'optionD_0', 'explanation_0'];
+
+    addCustomSlots(question.questionText, 'questionText');
+    if (question.options?.A) addCustomSlots(question.options.A.text, 'optionA');
+    if (question.options?.B) addCustomSlots(question.options.B.text, 'optionB');
+    if (question.options?.C) addCustomSlots(question.options.C.text, 'optionC');
+    if (question.options?.D) addCustomSlots(question.options.D.text, 'optionD');
+    addCustomSlots(question.explanation, 'explanation');
+
     if (Array.isArray(question.imageSlots)) {
-      question.imageSlots.forEach(s => { if (!standardKeys.includes(s.slotId)) slots.push(s); });
+      question.imageSlots.forEach(s => {
+        if (!standardKeys.includes(s.slotId) && !slots.some(x => x.slotId === s.slotId)) {
+          slots.push(s);
+        }
+      });
     }
     question.imageSlots = slots;
 
@@ -637,13 +698,72 @@ exports.bulkSaveQuestions = async (req, res) => {
 
     const savedQuestions = [];
     for (const q of questions) {
-      const slots = [];
-      if (q.questionImage) slots.push({ slotId: 'questionText_0', url: q.questionImage });
-      if (q.optionAImage)  slots.push({ slotId: 'optionA_0', url: q.optionAImage });
-      if (q.optionBImage)  slots.push({ slotId: 'optionB_0', url: q.optionBImage });
-      if (q.optionCImage)  slots.push({ slotId: 'optionC_0', url: q.optionCImage });
-      if (q.optionDImage)  slots.push({ slotId: 'optionD_0', url: q.optionDImage });
-      if (q.solutionImage) slots.push({ slotId: 'explanation_0', url: q.solutionImage });
+      let slots = [];
+      if (Array.isArray(q.imageSlots) && q.imageSlots.length > 0) {
+        slots = q.imageSlots.map(s => ({
+          slotId: s.slotId,
+          url: s.url || null
+        }));
+      } else {
+        const addCustomSlots = (text, prefix) => {
+          if (!text) return;
+          const matches = text.match(/\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi);
+          const count = matches ? matches.length : 0;
+          for (let s = 0; s < count; s++) {
+            const slotId = `${prefix}_${s}`;
+            let url = null;
+            if (slotId === 'questionText_0') url = q.questionImage;
+            if (slotId === 'optionA_0') url = q.optionAImage;
+            if (slotId === 'optionB_0') url = q.optionBImage;
+            if (slotId === 'optionC_0') url = q.optionCImage;
+            if (slotId === 'optionD_0') url = q.optionDImage;
+            if (slotId === 'explanation_0') url = q.solutionImage;
+            slots.push({ slotId, url });
+          }
+        };
+
+        if (q.questionImage) slots.push({ slotId: 'questionText_0', url: q.questionImage });
+        if (q.optionAImage)  slots.push({ slotId: 'optionA_0', url: q.optionAImage });
+        if (q.optionBImage)  slots.push({ slotId: 'optionB_0', url: q.optionBImage });
+        if (q.optionCImage)  slots.push({ slotId: 'optionC_0', url: q.optionCImage });
+        if (q.optionDImage)  slots.push({ slotId: 'optionD_0', url: q.optionDImage });
+        if (q.solutionImage) slots.push({ slotId: 'explanation_0', url: q.solutionImage });
+
+        addCustomSlots(q.questionText, 'questionText');
+        addCustomSlots(q.options?.A?.text || q.optionA, 'optionA');
+        addCustomSlots(q.options?.B?.text || q.optionB, 'optionB');
+        addCustomSlots(q.options?.C?.text || q.optionC, 'optionC');
+        addCustomSlots(q.options?.D?.text || q.optionD, 'optionD');
+        addCustomSlots(q.explanation, 'explanation');
+      }
+
+      const uniqueSlots = [];
+      slots.forEach(s => {
+        const existingIdx = uniqueSlots.findIndex(x => x.slotId === s.slotId);
+        if (existingIdx !== -1) {
+          if (!uniqueSlots[existingIdx].url && s.url) {
+            uniqueSlots[existingIdx].url = s.url;
+          }
+        } else {
+          uniqueSlots.push(s);
+        }
+      });
+
+      let questionImage = q.questionImage || null;
+      let optionAImage = q.optionAImage || null;
+      let optionBImage = q.optionBImage || null;
+      let optionCImage = q.optionCImage || null;
+      let optionDImage = q.optionDImage || null;
+      let solutionImage = q.solutionImage || null;
+
+      uniqueSlots.forEach(s => {
+        if (s.slotId === 'questionText_0') questionImage = s.url;
+        if (s.slotId === 'optionA_0') optionAImage = s.url;
+        if (s.slotId === 'optionB_0') optionBImage = s.url;
+        if (s.slotId === 'optionC_0') optionCImage = s.url;
+        if (s.slotId === 'optionD_0') optionDImage = s.url;
+        if (s.slotId === 'explanation_0') solutionImage = s.url;
+      });
 
       const newQuestion = await Question.create({
         questionNumber: parseInt(q.questionNumber, 10) || (savedQuestions.length + 1),
@@ -651,14 +771,20 @@ exports.bulkSaveQuestions = async (req, res) => {
         questionType: q.questionType || 'MCQ',
         questionText: q.questionText || 'Question text placeholder',
         options: {
-          A: { text: q.options?.A?.text || q.optionA || '', image: q.optionAImage || null },
-          B: { text: q.options?.B?.text || q.optionB || '', image: q.optionBImage || null },
-          C: { text: q.options?.C?.text || q.optionC || '', image: q.optionCImage || null },
-          D: { text: q.options?.D?.text || q.optionD || '', image: q.optionDImage || null },
+          A: { text: q.options?.A?.text || q.optionA || '', image: optionAImage },
+          B: { text: q.options?.B?.text || q.optionB || '', image: optionBImage },
+          C: { text: q.options?.C?.text || q.optionC || '', image: optionCImage },
+          D: { text: q.options?.D?.text || q.optionD || '', image: optionDImage },
         },
         correctAnswer: q.correctAnswer || 'A',
         explanation: q.explanation || '',
-        imageSlots: slots,
+        questionImage,
+        optionAImage,
+        optionBImage,
+        optionCImage,
+        optionDImage,
+        solutionImage,
+        imageSlots: uniqueSlots,
         subject: subject || q.subject,
         chapter: chapter || q.chapter,
         concept: concept || q.concept,
@@ -841,6 +967,49 @@ exports.deleteImageField = async (req, res) => {
       question._id, 'warning');
 
     res.status(200).json({ success: true, message: 'Image removed successfully', question });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * @desc    Delete image for a specific slot
+ * @route   DELETE /api/questions/:id/slots/:slotId
+ * @access  Private (Admin Only)
+ */
+exports.deleteSlotImage = async (req, res) => {
+  try {
+    const question = await Question.findById(req.params.id);
+    if (!question) return res.status(404).json({ success: false, error: 'Question not found' });
+
+    const { slotId } = req.params;
+    const slotIndex = question.imageSlots.findIndex(s => s.slotId === slotId);
+    if (slotIndex !== -1) {
+      question.imageSlots[slotIndex].url = null;
+    }
+
+    const slotIdMap = {
+      'questionText_0': 'questionImage', 'optionA_0': 'optionAImage',
+      'optionB_0': 'optionBImage', 'optionC_0': 'optionCImage',
+      'optionD_0': 'optionDImage', 'explanation_0': 'solutionImage',
+    };
+    const mappedField = slotIdMap[slotId];
+    if (mappedField) {
+      question[mappedField] = null;
+      if (mappedField === 'optionAImage') question.options.A.image = null;
+      if (mappedField === 'optionBImage') question.options.B.image = null;
+      if (mappedField === 'optionCImage') question.options.C.image = null;
+      if (mappedField === 'optionDImage') question.options.D.image = null;
+    }
+
+    recordEdit(question, req.user._id, `Deleted image for slot ${slotId}`);
+    await question.save();
+
+    await logActivity(req, 'DELETE_IMAGE',
+      `Deleted image from slot '${slotId}' on question #${question.questionNumber}`,
+      question._id, 'warning');
+
+    res.status(200).json({ success: true, message: 'Image removed from slot successfully', question });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

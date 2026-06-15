@@ -8,6 +8,7 @@ const {
   updateQuestion,
   deleteQuestion,
   uploadSlotImage,
+  deleteSlotImage,
   getStats,
   parseImport,
   bulkSaveQuestions,
@@ -57,6 +58,7 @@ router.delete('/:id', protect, adminOnly, deleteQuestion);
 
 // ─── Image Management (under /:id) ───────────────────────────────────────────
 router.post('/:id/slots/:slotId', protect, adminOnly, uploadImage.single('image'), uploadSlotImage);
+router.delete('/:id/slots/:slotId', protect, adminOnly, deleteSlotImage);
 router.post('/:id/image-fields/:fieldName', protect, adminOnly, uploadImage.single('image'), updateImageField);
 router.delete('/:id/image-fields/:fieldName', protect, adminOnly, deleteImageField);
 

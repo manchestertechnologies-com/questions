@@ -211,8 +211,8 @@ const StudentPractice = () => {
     
     let finalElements = [];
     for (const el of elements) {
-      if (typeof el === 'string' && el.includes('[[IMG_SLOT]]')) {
-        const parts = el.split('[[IMG_SLOT]]');
+      if (typeof el === 'string' && /\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi.test(el)) {
+        const parts = el.split(/\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi);
         for (let p = 0; p < parts.length; p++) {
           finalElements.push(parts[p]);
           if (p < parts.length - 1) {

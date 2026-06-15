@@ -252,10 +252,10 @@ const ImportCenter = () => {
     }
   };
 
-  const handleParsePasteJson = (e) => {
+  const handleParsePasteJson = async (e) => {
     e.preventDefault();
     if (!pastedJson.trim()) {
-      setErrorMessage('Please paste some JSON to parse.');
+      setErrorMessage('Please paste some JSON/Text to parse.');
       return;
     }
     if (!selectedSubject || !selectedChapter || !selectedConcept) {
@@ -267,94 +267,182 @@ const ImportCenter = () => {
     setErrorMessage(null);
     setStatusMessage(null);
 
-    try {
-      const parsed = JSON.parse(pastedJson);
-      const items = Array.isArray(parsed) ? parsed : [parsed];
-      
-      const validatedQuestions = items.map((item, i) => {
-        const qNum = typeof item.questionNumber === 'number' ? item.questionNumber : (i + 1);
-        const questionText = item.questionText || '';
+    const trimmed = pastedJson.trim();
+    let isJson = false;
+    let parsedData = null;
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        parsedData = JSON.parse(trimmed);
+        isJson = true;
+      } catch (err) {
+        // Not valid JSON, will fallback to raw text parsing
+      }
+    }
+
+    if (isJson && parsedData) {
+      try {
+        const items = Array.isArray(parsedData) ? parsedData : [parsedData];
         
-        if (!questionText) {
-          throw new Error(`Question entry at index ${i} is missing 'questionText'.`);
-        }
-        
-        // Options normalization
-        const optA = (typeof item.options?.A === 'object') ? (item.options.A.text || '') : (item.options?.A || item.optionA || '');
-        const optB = (typeof item.options?.B === 'object') ? (item.options.B.text || '') : (item.options?.B || item.optionB || '');
-        const optC = (typeof item.options?.C === 'object') ? (item.options.C.text || '') : (item.options?.C || item.optionC || '');
-        const optD = (typeof item.options?.D === 'object') ? (item.options.D.text || '') : (item.options?.D || item.optionD || '');
-        
-        const correctAnswer = String(item.correctAnswer || 'A').toUpperCase().trim();
-        if (!['A', 'B', 'C', 'D'].includes(correctAnswer)) {
-          throw new Error(`Question ${qNum} contains invalid correctAnswer '${correctAnswer}'. Must be A, B, C, or D.`);
-        }
-        
-        const explanation = item.explanation || '';
-        
-        // Initialize imageSlots
-        let imageSlots = [];
-        if (Array.isArray(item.imageSlots)) {
-          imageSlots = item.imageSlots.map(slot => ({
-            slotId: slot.slotId,
-            url: slot.url || null
-          }));
-        } else {
-          const registerSlots = (sourceText, prefix) => {
-            if (!sourceText) return;
-            const matches = sourceText.match(/\[\[IMG_SLOT\]\]/g);
-            const count = matches ? matches.length : 0;
-            for (let s = 0; s < count; s++) {
-              imageSlots.push({
-                slotId: `${prefix}_${s}`,
-                url: null
-              });
-            }
+        const validatedQuestions = items.map((item, i) => {
+          const qNum = typeof item.questionNumber === 'number' ? item.questionNumber : (i + 1);
+          const questionText = item.questionText || '';
+          
+          if (!questionText) {
+            throw new Error(`Question entry at index ${i} is missing 'questionText'.`);
+          }
+          
+          // Options normalization
+          const optA = (typeof item.options?.A === 'object') ? (item.options.A.text || '') : (item.options?.A || item.optionA || '');
+          const optB = (typeof item.options?.B === 'object') ? (item.options.B.text || '') : (item.options?.B || item.optionB || '');
+          const optC = (typeof item.options?.C === 'object') ? (item.options.C.text || '') : (item.options?.C || item.optionC || '');
+          const optD = (typeof item.options?.D === 'object') ? (item.options.D.text || '') : (item.options?.D || item.optionD || '');
+          
+          const correctAnswer = String(item.correctAnswer || 'A').toUpperCase().trim();
+          if (!['A', 'B', 'C', 'D'].includes(correctAnswer)) {
+            throw new Error(`Question ${qNum} contains invalid correctAnswer '${correctAnswer}'. Must be A, B, C, or D.`);
+          }
+          
+          const explanation = item.explanation || '';
+          
+          // Initialize imageSlots
+          let imageSlots = [];
+          if (Array.isArray(item.imageSlots)) {
+            imageSlots = item.imageSlots.map(slot => ({
+              slotId: slot.slotId,
+              url: slot.url || null
+            }));
+          } else {
+            const registerSlots = (sourceText, prefix) => {
+              if (!sourceText) return;
+              const matches = sourceText.match(/\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi);
+              const count = matches ? matches.length : 0;
+              for (let s = 0; s < count; s++) {
+                imageSlots.push({
+                  slotId: `${prefix}_${s}`,
+                  url: null
+                });
+              }
+            };
+            registerSlots(questionText, 'questionText');
+            registerSlots(optA, 'optionA');
+            registerSlots(optB, 'optionB');
+            registerSlots(optC, 'optionC');
+            registerSlots(optD, 'optionD');
+            registerSlots(explanation, 'explanation');
+          }
+          
+          return {
+            questionNumber: qNum,
+            title: item.title || `Question ${qNum}`,
+            questionType: item.questionType || 'MCQ',
+            questionText,
+            options: {
+              A: { text: optA, image: (typeof item.options?.A === 'object') ? (item.options.A.image || null) : (item.optionAImage || null) },
+              B: { text: optB, image: (typeof item.options?.B === 'object') ? (item.options.B.image || null) : (item.optionBImage || null) },
+              C: { text: optC, image: (typeof item.options?.C === 'object') ? (item.options.C.image || null) : (item.optionCImage || null) },
+              D: { text: optD, image: (typeof item.options?.D === 'object') ? (item.options.D.image || null) : (item.optionDImage || null) }
+            },
+            correctAnswer,
+            explanation,
+            imageSlots,
+            difficulty: item.difficulty || 'Easy',
+            examType: Array.isArray(item.examType) ? item.examType : [item.examType || 'Board'],
+            classNum: item.classNum || 11,
+            marks: typeof item.marks === 'number' ? item.marks : 4,
+            negativeMarks: typeof item.negativeMarks === 'number' ? item.negativeMarks : 1,
+            questionImage: item.questionImage || null,
+            optionAImage: item.optionAImage || null,
+            optionBImage: item.optionBImage || null,
+            optionCImage: item.optionCImage || null,
+            optionDImage: item.optionDImage || null,
+            solutionImage: item.solutionImage || null,
           };
-          registerSlots(questionText, 'questionText');
-          registerSlots(optA, 'optionA');
-          registerSlots(optB, 'optionB');
-          registerSlots(optC, 'optionC');
-          registerSlots(optD, 'optionD');
-          registerSlots(explanation, 'explanation');
-        }
+        });
         
-        return {
-          questionNumber: qNum,
-          title: item.title || `Question ${qNum}`,
-          questionType: item.questionType || 'MCQ',
-          questionText,
-          options: {
-            A: { text: optA, image: (typeof item.options?.A === 'object') ? (item.options.A.image || null) : (item.optionAImage || null) },
-            B: { text: optB, image: (typeof item.options?.B === 'object') ? (item.options.B.image || null) : (item.optionBImage || null) },
-            C: { text: optC, image: (typeof item.options?.C === 'object') ? (item.options.C.image || null) : (item.optionCImage || null) },
-            D: { text: optD, image: (typeof item.options?.D === 'object') ? (item.options.D.image || null) : (item.optionDImage || null) }
-          },
-          correctAnswer,
-          explanation,
-          imageSlots,
-          difficulty: item.difficulty || 'Easy',
-          examType: Array.isArray(item.examType) ? item.examType : [item.examType || 'Board'],
-          classNum: item.classNum || 11,
-          marks: typeof item.marks === 'number' ? item.marks : 4,
-          negativeMarks: typeof item.negativeMarks === 'number' ? item.negativeMarks : 1,
-          questionImage: item.questionImage || null,
-          optionAImage: item.optionAImage || null,
-          optionBImage: item.optionBImage || null,
-          optionCImage: item.optionCImage || null,
-          optionDImage: item.optionDImage || null,
-          solutionImage: item.solutionImage || null,
-        };
-      });
-      
-      setParsedQuestions(validatedQuestions);
-      setReviewMode(true);
-      setStatusMessage(`Successfully parsed ${validatedQuestions.length} questions from pasted JSON. Please review them below.`);
-    } catch (err) {
-      console.error(err);
-      setErrorMessage('JSON Parsing Failed: ' + err.message);
-    } finally {
-      setLoading(false);
+        setParsedQuestions(validatedQuestions);
+        setReviewMode(true);
+        setStatusMessage(`Successfully parsed ${validatedQuestions.length} questions from pasted JSON. Please review them below.`);
+      } catch (err) {
+        console.error(err);
+        setErrorMessage('JSON Parsing Failed: ' + err.message);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Fallback: parse as raw text
+      try {
+        const res = await API.post('/questions/parse-text', { text: pastedJson });
+        if (res.data.success && res.data.questions && res.data.questions.length > 0) {
+          const validatedQuestions = res.data.questions.map((item, i) => {
+            const qNum = i + 1;
+            const questionText = item.questionText || '';
+            const optA = item.options?.A || item.optionA || '';
+            const optB = item.options?.B || item.optionB || '';
+            const optC = item.options?.C || item.optionC || '';
+            const optD = item.options?.D || item.optionD || '';
+            const correctAnswer = String(item.correctAnswer || 'A').toUpperCase().trim();
+            const explanation = item.explanation || '';
+            
+            // Initialize imageSlots
+            let imageSlots = [];
+            const registerSlots = (sourceText, prefix) => {
+              if (!sourceText) return;
+              const matches = sourceText.match(/\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi);
+              const count = matches ? matches.length : 0;
+              for (let s = 0; s < count; s++) {
+                imageSlots.push({
+                  slotId: `${prefix}_${s}`,
+                  url: null
+                });
+              }
+            };
+            registerSlots(questionText, 'questionText');
+            registerSlots(optA, 'optionA');
+            registerSlots(optB, 'optionB');
+            registerSlots(optC, 'optionC');
+            registerSlots(optD, 'optionD');
+            registerSlots(explanation, 'explanation');
+
+            return {
+              questionNumber: qNum,
+              title: `Question ${qNum}`,
+              questionType: item.questionType || 'MCQ',
+              questionText,
+              options: {
+                A: { text: optA, image: null },
+                B: { text: optB, image: null },
+                C: { text: optC, image: null },
+                D: { text: optD, image: null }
+              },
+              correctAnswer,
+              explanation,
+              imageSlots,
+              difficulty: 'Easy',
+              examType: ['Board'],
+              classNum: 11,
+              marks: 4,
+              negativeMarks: 1,
+              questionImage: null,
+              optionAImage: null,
+              optionBImage: null,
+              optionCImage: null,
+              optionDImage: null,
+              solutionImage: null,
+            };
+          });
+          
+          setParsedQuestions(validatedQuestions);
+          setReviewMode(true);
+          setStatusMessage(`Successfully parsed ${validatedQuestions.length} questions from pasted text. Please review them below.`);
+        } else {
+          setErrorMessage('Could not extract any questions from the pasted text. Please verify formatting.');
+        }
+      } catch (err) {
+        console.error(err);
+        setErrorMessage(err.response?.data?.error || 'Text Parsing Failed. Please verify the question format.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -431,6 +519,131 @@ const ImportCenter = () => {
       }
       return q;
     }));
+  };
+
+  const handleUploadSlotImage = async (qIdx, slotId, file) => {
+    const fieldKey = `${qIdx}_slot_${slotId}`;
+    setLoadingField(fieldKey);
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+      const res = await API.post('/questions/temp-upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success) {
+        const imageUrl = res.data.url;
+        setParsedQuestions(prev => prev.map((q, idx) => {
+          if (idx === qIdx) {
+            const updatedSlots = (q.imageSlots || []).map(s => 
+              s.slotId === slotId ? { ...s, url: imageUrl } : s
+            );
+            if (!updatedSlots.some(s => s.slotId === slotId)) {
+              updatedSlots.push({ slotId, url: imageUrl });
+            }
+            const updated = { ...q, imageSlots: updatedSlots };
+            if (slotId === 'questionText_0') updated.questionImage = imageUrl;
+            if (slotId === 'optionA_0') { updated.optionAImage = imageUrl; updated.options.A.image = imageUrl; }
+            if (slotId === 'optionB_0') { updated.optionBImage = imageUrl; updated.options.B.image = imageUrl; }
+            if (slotId === 'optionC_0') { updated.optionCImage = imageUrl; updated.options.C.image = imageUrl; }
+            if (slotId === 'optionD_0') { updated.optionDImage = imageUrl; updated.options.D.image = imageUrl; }
+            if (slotId === 'explanation_0') updated.solutionImage = imageUrl;
+            return updated;
+          }
+          return q;
+        }));
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to upload slot image');
+    } finally {
+      setLoadingField(null);
+    }
+  };
+
+  const handleDeleteSlotImage = (qIdx, slotId) => {
+    setParsedQuestions(prev => prev.map((q, idx) => {
+      if (idx === qIdx) {
+        const updatedSlots = (q.imageSlots || []).map(s => 
+          s.slotId === slotId ? { ...s, url: null } : s
+        );
+        const updated = { ...q, imageSlots: updatedSlots };
+        if (slotId === 'questionText_0') updated.questionImage = null;
+        if (slotId === 'optionA_0') { updated.optionAImage = null; updated.options.A.image = null; }
+        if (slotId === 'optionB_0') { updated.optionBImage = null; updated.options.B.image = null; }
+        if (slotId === 'optionC_0') { updated.optionCImage = null; updated.options.C.image = null; }
+        if (slotId === 'optionD_0') { updated.optionDImage = null; updated.options.D.image = null; }
+        if (slotId === 'explanation_0') updated.solutionImage = null;
+        return updated;
+      }
+      return q;
+    }));
+  };
+
+  const renderEditableTextWithSlots = (text, prefix, qIdx, q) => {
+    if (!text) return null;
+    const regex = /\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi;
+    if (!regex.test(text)) return null;
+    
+    const parts = text.split(regex);
+    const elements = [];
+    
+    for (let p = 0; p < parts.length; p++) {
+      elements.push(<span key={`text_${p}`}>{parts[p]}</span>);
+      if (p < parts.length - 1) {
+        const slotId = `${prefix}_${p}`;
+        const slot = q.imageSlots?.find(s => s.slotId === slotId);
+        const imageUrl = slot ? slot.url : null;
+        
+        elements.push(
+          <span key={`slot_${p}`} className="inline-block mx-1.5 align-middle">
+            {imageUrl ? (
+              <div className="relative group inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white p-1 max-w-[200px]">
+                <img 
+                  src={imageUrl.startsWith('/') ? `http://localhost:5000${imageUrl}` : imageUrl} 
+                  alt={slotId} 
+                  className="h-8 w-12 object-contain rounded border bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSlotImage(qIdx, slotId)}
+                  className="px-1.5 py-0.5 bg-danger-50 hover:bg-danger-100 text-danger-600 rounded text-[9px] font-bold cursor-pointer"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <label className="border border-dashed border-primary-300 bg-primary-50/20 hover:bg-primary-50 dark:border-primary-800 dark:bg-primary-950/20 rounded-lg px-2 py-0.5 flex items-center justify-center cursor-pointer hover:border-primary-400 transition-all select-none">
+                {loadingField === `${qIdx}_slot_${slotId}` ? (
+                  <Loader2 className="animate-spin text-primary-500" size={10} />
+                ) : (
+                  <span className="text-[10px] font-bold text-primary-500 flex items-center gap-1">
+                    📷 Click to upload slot
+                  </span>
+                )}
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  className="hidden" 
+                  disabled={loadingField === `${qIdx}_slot_${slotId}`}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handleUploadSlotImage(qIdx, slotId, e.target.files[0]);
+                    }
+                  }} 
+                />
+              </label>
+            )}
+          </span>
+        );
+      }
+    }
+    
+    return (
+      <div className="p-2.5 border border-slate-100 dark:border-slate-800/80 rounded-xl bg-slate-50/30 dark:bg-slate-900/10 text-xs text-slate-700 dark:text-slate-300 leading-normal my-2">
+        <span className="text-[9px] font-bold text-primary-400 block mb-1 uppercase tracking-wider">Inline Layout Preview (Click to upload):</span>
+        {elements}
+      </div>
+    );
   };
 
   const handleBulkSave = async () => {
@@ -573,6 +786,7 @@ const ImportCenter = () => {
                       rows={2}
                       className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 dark:text-slate-200"
                     />
+                    {renderEditableTextWithSlots(q.questionText, 'questionText', qIdx, q)}
                   </div>
 
                   {/* Question Image */}
@@ -597,6 +811,7 @@ const ImportCenter = () => {
                               onChange={(e) => handleUpdateOptionField(qIdx, key, e.target.value)}
                               className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 dark:text-slate-200"
                             />
+                            {renderEditableTextWithSlots(q.options[key]?.text || '', `option${key}`, qIdx, q)}
                           </div>
                           <ImageReviewSlot
                             label={`Option ${key} Image`}
@@ -638,6 +853,7 @@ const ImportCenter = () => {
                       rows={2}
                       className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 dark:text-slate-200"
                     />
+                    {renderEditableTextWithSlots(q.explanation, 'explanation', qIdx, q)}
                   </div>
 
                   {/* Solution Image */}
@@ -957,7 +1173,7 @@ const ImportCenter = () => {
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
                   }`}
                 >
-                  Paste JSON
+                  Paste JSON / Text
                 </button>
               </div>
             </div>
@@ -1020,7 +1236,7 @@ const ImportCenter = () => {
                 <textarea
                   value={pastedJson}
                   onChange={(e) => setPastedJson(e.target.value)}
-                  placeholder={`[\n  {\n    "questionNumber": 1,\n    "questionText": "A block of mass 2kg is placed on...",\n    "options": {\n      "A": "10 m/s²",\n      "B": "5 m/s²",\n      "C": "0 m/s²",\n      "D": "2 m/s²"\n    },\n    "correctAnswer": "B",\n    "explanation": "Using F = ma, we get a = F/m..."\n  }\n]`}
+                  placeholder={`Paste structured JSON or raw question text here.\n\nJSON Example:\n[\n  {\n    "questionNumber": 1,\n    "questionText": "A block of mass 2kg is placed on...",\n    "options": {\n      "A": "10 m/s²",\n      "B": "5 m/s²"\n    },\n    "correctAnswer": "B"\n  }\n]\n\nRaw Text Example:\nQuestion 1\nWhat is the capital of India?\nA) Mumbai\nB) Delhi\nCorrect: B`}
                   rows={8}
                   className="w-full p-4 bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-[11px] font-mono text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-slate-400 dark:placeholder-slate-700 leading-normal"
                 />

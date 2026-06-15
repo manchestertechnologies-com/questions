@@ -86,7 +86,7 @@ const Login = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="ManchesterTECHNOLOGIESS@gmail.com"
+                placeholder="manchestertechnologiess@gmail.com"
                 className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-950 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200"
               />
             </div>
@@ -132,7 +132,7 @@ const Login = () => {
             Default Admin credentials pre-seeded in code.
           </p>
           <div className="mt-2 text-left bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl p-3 text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
-            <p><strong>Admin Email:</strong> ManchesterTECHNOLOGIESS@gmail.com</p>
+            <p><strong>Admin Email:</strong> manchestertechnologiess@gmail.com</p>
             <p><strong>Admin Password:</strong> MANTECH</p>
           </div>
         </div>

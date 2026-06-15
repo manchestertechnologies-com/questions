@@ -388,6 +388,142 @@ const QuestionManager = () => {
 
   const imgUrl = (url) => url?.startsWith('/') ? `http://localhost:5000${url}` : url;
 
+  const renderTextWithSlots = (text, prefix) => {
+    if (!text) return null;
+    const regex = /\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi;
+    if (!regex.test(text)) return text;
+    
+    const parts = text.split(regex);
+    const finalElements = [];
+    
+    for (let p = 0; p < parts.length; p++) {
+      finalElements.push(<span key={`txt_${p}`}>{parts[p]}</span>);
+      if (p < parts.length - 1) {
+        const slotId = `${prefix}_${p}`;
+        const slot = activeQuestion?.imageSlots?.find(s => s.slotId === slotId);
+        if (slot && slot.url) {
+          finalElements.push(
+            <span key={`img_${p}`} className="block my-3">
+              <img 
+                src={imgUrl(slot.url)} 
+                alt={slotId} 
+                className="max-h-56 rounded-xl object-contain border border-slate-200 dark:border-slate-800 bg-white cursor-zoom-in"
+                onClick={() => setZoomedImg(imgUrl(slot.url))}
+              />
+            </span>
+          );
+        } else {
+          finalElements.push(
+            <span key={`pending_${p}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-400 font-mono my-2">
+              [ Diagram pending admin upload ]
+            </span>
+          );
+        }
+      }
+    }
+    return <span>{finalElements}</span>;
+  };
+
+  const renderEditableTextWithSlots = (text, prefix) => {
+    if (!text) return null;
+    const regex = /\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi;
+    if (!regex.test(text)) return null;
+    
+    const parts = text.split(regex);
+    const elements = [];
+    
+    for (let p = 0; p < parts.length; p++) {
+      elements.push(<span key={`text_${p}`}>{parts[p]}</span>);
+      if (p < parts.length - 1) {
+        const slotId = `${prefix}_${p}`;
+        const slot = activeQuestion?.imageSlots?.find(s => s.slotId === slotId);
+        const imageUrl = slot ? slot.url : null;
+        
+        elements.push(
+          <span key={`slot_${p}`} className="inline-block mx-1.5 align-middle">
+            {imageUrl ? (
+              <div className="relative group inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white p-1 max-w-[200px]">
+                <img 
+                  src={imageUrl.startsWith('/') ? `http://localhost:5000${imageUrl}` : imageUrl} 
+                  alt={slotId} 
+                  className="h-8 w-12 object-contain rounded border bg-white cursor-zoom-in"
+                  onClick={() => setZoomedImg(imgUrl(imageUrl))}
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (window.confirm('Are you sure you want to remove this slot image?')) {
+                      try {
+                        const res = await API.delete(`/questions/${activeQuestion._id}/slots/${slotId}`);
+                        if (res.data.success) {
+                          const detailRes = await API.get(`/questions/${activeQuestion._id}`);
+                          if (detailRes.data.success) {
+                            const updated = detailRes.data.question;
+                            setActiveQuestion(updated);
+                            setQuestions(qs => qs.map(q => q._id === updated._id ? updated : q));
+                            showToast('Slot image removed.');
+                          }
+                        }
+                      } catch { showToast('Image removal failed', 'error'); }
+                    }
+                  }}
+                  className="px-1.5 py-0.5 bg-danger-50 hover:bg-danger-100 text-danger-600 rounded text-[9px] font-bold cursor-pointer"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <label className="border border-dashed border-primary-300 bg-primary-50/20 hover:bg-primary-50 dark:border-primary-800 dark:bg-primary-950/20 rounded-lg px-2 py-0.5 flex items-center justify-center cursor-pointer hover:border-primary-400 transition-all select-none">
+                {loadingField === `slot_${slotId}` ? (
+                  <Loader2 className="animate-spin text-primary-500" size={10} />
+                ) : (
+                  <span className="text-[10px] font-bold text-primary-500 flex items-center gap-1">
+                    📷 Click to upload slot
+                  </span>
+                )}
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  className="hidden" 
+                  disabled={loadingField === `slot_${slotId}`}
+                  onChange={async (e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setLoadingField(`slot_${slotId}`);
+                      const fd = new FormData();
+                      fd.append('image', e.target.files[0]);
+                      try {
+                        const res = await API.post(`/questions/${activeQuestion._id}/slots/${slotId}`, fd, {
+                          headers: { 'Content-Type': 'multipart/form-data' }
+                        });
+                        if (res.data.success) {
+                          const detailRes = await API.get(`/questions/${activeQuestion._id}`);
+                          if (detailRes.data.success) {
+                            const updated = detailRes.data.question;
+                            setActiveQuestion(updated);
+                            setQuestions(qs => qs.map(q => q._id === updated._id ? updated : q));
+                            showToast('Slot image uploaded!');
+                          }
+                        }
+                      } catch { showToast('Image upload failed', 'error'); }
+                      finally { setLoadingField(null); }
+                    }
+                  }} 
+                />
+              </label>
+            )}
+          </span>
+        );
+      }
+    }
+    
+    return (
+      <div className="p-2.5 border border-slate-100 dark:border-slate-800/80 rounded-xl bg-slate-50/30 dark:bg-slate-900/10 text-xs text-slate-700 dark:text-slate-300 leading-normal my-2">
+        <span className="text-[9px] font-bold text-primary-400 block mb-1 uppercase tracking-wider">Inline Layout Preview (Click to upload):</span>
+        {elements}
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 p-6 space-y-5 max-w-7xl mx-auto w-full animate-fade-in">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -627,11 +763,11 @@ const QuestionManager = () => {
                   {/* Question text */}
                   <div>
                     <p className="input-label mb-2">Question</p>
-                    <div className="question-text secure-content">
+                    <div className="question-text secure-content leading-relaxed">
                       {activeQuestion.questionImage && (
                         <img src={imgUrl(activeQuestion.questionImage)} alt="Q" className="max-h-48 rounded-xl mb-3 border border-slate-200 dark:border-slate-800 object-contain bg-white cursor-zoom-in" onClick={() => setZoomedImg(imgUrl(activeQuestion.questionImage))} />
                       )}
-                      <p className="leading-relaxed">{activeQuestion.questionText}</p>
+                      {renderTextWithSlots(activeQuestion.questionText, 'questionText')}
                     </div>
                   </div>
 
@@ -645,7 +781,9 @@ const QuestionManager = () => {
                         <span className={`option-badge ${activeQuestion.correctAnswer === opt ? 'correct' : ''}`}>{opt}</span>
                         <div className="flex-1">
                           {img && <img src={imgUrl(img)} alt={`Option ${opt}`} className="h-12 mb-1 rounded-lg object-contain cursor-zoom-in" onClick={() => setZoomedImg(imgUrl(img))} />}
-                          <span className="text-sm text-slate-700 dark:text-slate-300">{text}</span>
+                          <div className="text-sm text-slate-700 dark:text-slate-300">
+                            {renderTextWithSlots(text, `option${opt}`)}
+                          </div>
                         </div>
                         {activeQuestion.correctAnswer === opt && <CheckCircle size={15} className="text-emerald-500 shrink-0" />}
                       </div>
@@ -659,7 +797,9 @@ const QuestionManager = () => {
                       {activeQuestion.solutionImage && (
                         <img src={imgUrl(activeQuestion.solutionImage)} alt="Solution" className="max-h-40 rounded-lg mb-2 object-contain cursor-zoom-in" onClick={() => setZoomedImg(imgUrl(activeQuestion.solutionImage))} />
                       )}
-                      <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{activeQuestion.explanation}</p>
+                      <div className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                        {renderTextWithSlots(activeQuestion.explanation, 'explanation')}
+                      </div>
                     </div>
                   )}
 
@@ -709,18 +849,21 @@ const QuestionManager = () => {
                   <div>
                     <label className="input-label">Question Text</label>
                     <textarea className="input-field resize-y" rows={4} value={editForm.questionText} onChange={e => setEditForm(f => ({ ...f, questionText: e.target.value }))} />
+                    {renderEditableTextWithSlots(editForm.questionText, 'questionText')}
                   </div>
 
                   {['A','B','C','D'].map(opt => (
                     <div key={opt}>
                       <label className="input-label">Option {opt}</label>
                       <input type="text" className="input-field" value={editForm[`option${opt}`]} onChange={e => setEditForm(f => ({ ...f, [`option${opt}`]: e.target.value }))} />
+                      {renderEditableTextWithSlots(editForm[`option${opt}`], `option${opt}`)}
                     </div>
                   ))}
 
                   <div>
                     <label className="input-label">Explanation</label>
                     <textarea className="input-field resize-y" rows={3} value={editForm.explanation} onChange={e => setEditForm(f => ({ ...f, explanation: e.target.value }))} />
+                    {renderEditableTextWithSlots(editForm.explanation, 'explanation')}
                   </div>
 
                   <div className="grid grid-cols-3 gap-3">

@@ -33,46 +33,79 @@ const parseJsonQuestions = (buffer) => {
       
       const explanation = item.explanation || '';
       
-      // Initialize imageSlots
+      // Extract legacy image properties
+      const optAImage = (typeof item.options?.A === 'object') ? (item.options.A.image || null) : (item.optionAImage || null);
+      const optBImage = (typeof item.options?.B === 'object') ? (item.options.B.image || null) : (item.optionBImage || null);
+      const optCImage = (typeof item.options?.C === 'object') ? (item.options.C.image || null) : (item.optionCImage || null);
+      const optDImage = (typeof item.options?.D === 'object') ? (item.options.D.image || null) : (item.optionDImage || null);
+      const questionImage = item.questionImage || null;
+      const solutionImage = item.solutionImage || item.explanationImage || null;
+
+      // Scan and initialize imageSlots from placeholders
       let imageSlots = [];
+      const registerSlots = (sourceText, prefix) => {
+        if (!sourceText) return;
+        const matches = sourceText.match(/\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi);
+        const count = matches ? matches.length : 0;
+        for (let s = 0; s < count; s++) {
+          const slotId = `${prefix}_${s}`;
+          // Check if it already exists in item.imageSlots
+          const existingSlot = Array.isArray(item.imageSlots) ? item.imageSlots.find(sl => sl.slotId === slotId) : null;
+          imageSlots.push({
+            slotId,
+            url: existingSlot ? (existingSlot.url || null) : null
+          });
+        }
+      };
+      
+      registerSlots(questionText, 'questionText');
+      registerSlots(optA, 'optionA');
+      registerSlots(optB, 'optionB');
+      registerSlots(optC, 'optionC');
+      registerSlots(optD, 'optionD');
+      registerSlots(explanation, 'explanation');
+
+      // Also copy any other pre-defined slots that didn't match standard text scanning
       if (Array.isArray(item.imageSlots)) {
-        // Use predefined slots if they exist
-        imageSlots = item.imageSlots.map(slot => ({
-          slotId: slot.slotId,
-          url: slot.url || null
-        }));
-      } else {
-        // Auto-generate slot placeholders by scanning text
-        const registerSlots = (sourceText, prefix) => {
-          if (!sourceText) return;
-          const matches = sourceText.match(/\[\[IMG_SLOT\]\]/g);
-          const count = matches ? matches.length : 0;
-          for (let s = 0; s < count; s++) {
+        item.imageSlots.forEach(slot => {
+          if (!imageSlots.some(s => s.slotId === slot.slotId)) {
             imageSlots.push({
-              slotId: `${prefix}_${s}`,
-              url: null
+              slotId: slot.slotId,
+              url: slot.url || null
             });
           }
-        };
-        registerSlots(questionText, 'questionText');
-        registerSlots(optA, 'optionA');
-        registerSlots(optB, 'optionB');
-        registerSlots(optC, 'optionC');
-        registerSlots(optD, 'optionD');
-        registerSlots(explanation, 'explanation');
+        });
       }
-      
+
+      // Sync legacy image fields with slot URLs if slot doesn't have a URL set yet
+      imageSlots.forEach(s => {
+        if (s.slotId === 'questionText_0' && !s.url) s.url = questionImage;
+        if (s.slotId === 'optionA_0' && !s.url) s.url = optAImage;
+        if (s.slotId === 'optionB_0' && !s.url) s.url = optBImage;
+        if (s.slotId === 'optionC_0' && !s.url) s.url = optCImage;
+        if (s.slotId === 'optionD_0' && !s.url) s.url = optDImage;
+        if (s.slotId === 'explanation_0' && !s.url) s.url = solutionImage;
+      });
+
       validatedQuestions.push({
         questionNumber: qNum,
+        title: item.title || `Question ${qNum}`,
+        questionType: item.questionType || 'MCQ',
         questionText,
         options: {
-          A: { text: optA, image: (typeof item.options?.A === 'object') ? (item.options.A.image || null) : null },
-          B: { text: optB, image: (typeof item.options?.B === 'object') ? (item.options.B.image || null) : null },
-          C: { text: optC, image: (typeof item.options?.C === 'object') ? (item.options.C.image || null) : null },
-          D: { text: optD, image: (typeof item.options?.D === 'object') ? (item.options.D.image || null) : null }
+          A: { text: optA, image: optAImage },
+          B: { text: optB, image: optBImage },
+          C: { text: optC, image: optCImage },
+          D: { text: optD, image: optDImage }
         },
         correctAnswer,
         explanation,
+        questionImage,
+        optionAImage,
+        optionBImage,
+        optionCImage,
+        optionDImage,
+        solutionImage,
         imageSlots,
         difficulty: item.difficulty || 'Easy',
         examType: Array.isArray(item.examType) ? item.examType : [item.examType || 'Board'],

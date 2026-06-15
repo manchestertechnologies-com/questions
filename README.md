@@ -41,7 +41,7 @@ You do not need to manually configure chapters or run standalone seed files. The
 1. Checks if the `Subject` collection is empty.
 2. If blank, it imports `ncertData.js` and seeds all subjects, chapters, concepts, and sub-concepts in a single nested sequence.
 3. Automatically seeds the default Admin credential:
-   - **Email**: `ManchesterTECHNOLOGIESS@gmail.com`
+   - **Email**: `manchestertechnologiess@gmail.com`
    - **Password**: `MANTECH`
 
 ---

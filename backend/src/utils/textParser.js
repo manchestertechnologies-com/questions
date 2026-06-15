@@ -75,7 +75,7 @@ const parseTextToQuestions = (text) => {
     const imageSlots = [];
     const registerSlots = (sourceText, prefix) => {
       if (!sourceText) return;
-      const matches = sourceText.match(/\[\[IMG_SLOT\]\]/g);
+      const matches = sourceText.match(/\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi);
       const count = matches ? matches.length : 0;
       for (let s = 0; s < count; s++) {
         imageSlots.push({
