@@ -391,9 +391,20 @@ const QuestionManager = () => {
   const renderTextWithSlots = (text, prefix) => {
     if (!text) return null;
     const regex = /\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi;
-    if (!regex.test(text)) return text;
     
-    const parts = text.split(regex);
+    const hasExplicitSlots = regex.test(text);
+    let processedText = text;
+    if (!hasExplicitSlots) {
+      const slotId = `${prefix}_0`;
+      const slot = activeQuestion?.imageSlots?.find(s => s.slotId === slotId);
+      if (slot && slot.url) {
+        processedText = processedText + ' [[IMAGE SLOT]]';
+      } else {
+        return text;
+      }
+    }
+    
+    const parts = processedText.split(regex);
     const finalElements = [];
     
     for (let p = 0; p < parts.length; p++) {
@@ -427,9 +438,14 @@ const QuestionManager = () => {
   const renderEditableTextWithSlots = (text, prefix) => {
     if (!text) return null;
     const regex = /\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi;
-    if (!regex.test(text)) return null;
     
-    const parts = text.split(regex);
+    const hasExplicitSlots = regex.test(text);
+    let processedText = text;
+    if (!hasExplicitSlots) {
+      processedText = processedText + ' [[IMAGE SLOT]]';
+    }
+    
+    const parts = processedText.split(regex);
     const elements = [];
     
     for (let p = 0; p < parts.length; p++) {

@@ -618,9 +618,14 @@ const ImportCenter = () => {
   const renderEditableTextWithSlots = (text, prefix, qIdx, q) => {
     if (!text) return null;
     const regex = /\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi;
-    if (!regex.test(text)) return null;
     
-    const parts = text.split(regex);
+    const hasExplicitSlots = regex.test(text);
+    let processedText = text;
+    if (!hasExplicitSlots) {
+      processedText = processedText + ' [[IMAGE SLOT]]';
+    }
+    
+    const parts = processedText.split(regex);
     const elements = [];
     
     for (let p = 0; p < parts.length; p++) {
