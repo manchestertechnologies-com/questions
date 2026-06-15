@@ -487,13 +487,34 @@ const ImportCenter = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       if (res.data.success) {
+        const imageUrl = res.data.url;
         setParsedQuestions(prev => prev.map((q, idx) => {
           if (idx === index) {
-            const updated = { ...q, [fieldName]: res.data.url };
-            if (fieldName === 'optionAImage') updated.options.A.image = res.data.url;
-            if (fieldName === 'optionBImage') updated.options.B.image = res.data.url;
-            if (fieldName === 'optionCImage') updated.options.C.image = res.data.url;
-            if (fieldName === 'optionDImage') updated.options.D.image = res.data.url;
+            const updated = { ...q, [fieldName]: imageUrl };
+            if (fieldName === 'optionAImage') updated.options.A.image = imageUrl;
+            if (fieldName === 'optionBImage') updated.options.B.image = imageUrl;
+            if (fieldName === 'optionCImage') updated.options.C.image = imageUrl;
+            if (fieldName === 'optionDImage') updated.options.D.image = imageUrl;
+
+            // Map standard upload field to corresponding slotId
+            let slotId = '';
+            if (fieldName === 'questionImage') slotId = 'questionText_0';
+            if (fieldName === 'optionAImage') slotId = 'optionA_0';
+            if (fieldName === 'optionBImage') slotId = 'optionB_0';
+            if (fieldName === 'optionCImage') slotId = 'optionC_0';
+            if (fieldName === 'optionDImage') slotId = 'optionD_0';
+            if (fieldName === 'solutionImage') slotId = 'explanation_0';
+
+            if (slotId) {
+              const updatedSlots = (q.imageSlots || []).map(s => 
+                s.slotId === slotId ? { ...s, url: imageUrl } : s
+              );
+              if (!updatedSlots.some(s => s.slotId === slotId)) {
+                updatedSlots.push({ slotId, url: imageUrl });
+              }
+              updated.imageSlots = updatedSlots;
+            }
+
             return updated;
           }
           return q;
@@ -515,6 +536,21 @@ const ImportCenter = () => {
         if (fieldName === 'optionBImage') updated.options.B.image = null;
         if (fieldName === 'optionCImage') updated.options.C.image = null;
         if (fieldName === 'optionDImage') updated.options.D.image = null;
+
+        let slotId = '';
+        if (fieldName === 'questionImage') slotId = 'questionText_0';
+        if (fieldName === 'optionAImage') slotId = 'optionA_0';
+        if (fieldName === 'optionBImage') slotId = 'optionB_0';
+        if (fieldName === 'optionCImage') slotId = 'optionC_0';
+        if (fieldName === 'optionDImage') slotId = 'optionD_0';
+        if (fieldName === 'solutionImage') slotId = 'explanation_0';
+
+        if (slotId) {
+          updated.imageSlots = (q.imageSlots || []).map(s => 
+            s.slotId === slotId ? { ...s, url: null } : s
+          );
+        }
+
         return updated;
       }
       return q;

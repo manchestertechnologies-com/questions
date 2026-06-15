@@ -426,9 +426,22 @@ const StudentPractice = () => {
 
                   {/* Question number and Text */}
                   <div className="space-y-4">
-                    <h2 className="text-lg font-extrabold text-slate-900 dark:text-white font-display flex items-start gap-2">
-                      <span className="text-primary-500">Q{activeQuestion.questionNumber}.</span>
-                      {renderTextWithSlots(activeQuestion.questionText, 'questionText')}
+                    <h2 className="text-lg font-extrabold text-slate-900 dark:text-white font-display flex flex-col gap-2">
+                      <span className="flex items-start gap-2">
+                        <span className="text-primary-500">Q{activeQuestion.questionNumber}.</span>
+                        <span>{renderTextWithSlots(activeQuestion.questionText, 'questionText')}</span>
+                      </span>
+                      {activeQuestion.questionImage && 
+                       !/\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi.test(activeQuestion.questionText) && 
+                       !activeQuestion.questionText.includes('[QUESTION_IMAGE_SLOT]') && (
+                        <div className="mt-2 block">
+                          <img 
+                            src={activeQuestion.questionImage.startsWith('/') ? `http://localhost:5000${activeQuestion.questionImage}` : activeQuestion.questionImage} 
+                            alt="Question diagram"
+                            className="max-h-64 rounded-xl object-contain border border-slate-200 dark:border-slate-800 bg-white"
+                          />
+                        </div>
+                      )}
                     </h2>
 
                     {/* Radio Options */}
@@ -461,8 +474,19 @@ const StudentPractice = () => {
                               }`}>
                                 {key}
                               </span>
-                              <div className="text-sm font-semibold leading-relaxed">
-                                {renderTextWithSlots(opt.text, `option${key}`)}
+                              <div className="text-sm font-semibold leading-relaxed flex flex-col gap-2">
+                                <div>{renderTextWithSlots(opt.text, `option${key}`)}</div>
+                                {opt.image && 
+                                 !/\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi.test(opt.text) && 
+                                 !opt.text.includes(`[OPTION_${key}_IMAGE_SLOT]`) && (
+                                  <div className="mt-1 block">
+                                    <img 
+                                      src={opt.image.startsWith('/') ? `http://localhost:5000${opt.image}` : opt.image} 
+                                      alt={`Option ${key}`}
+                                      className="max-h-28 rounded-lg object-contain border border-slate-200 dark:border-slate-800 bg-white"
+                                    />
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -528,11 +552,22 @@ const StudentPractice = () => {
                       <Bookmark size={14} className="text-primary-500" />
                       Detailed Solution
                     </h3>
-                    <div className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 border-l-4 border-primary-500 pl-4 py-1">
+                    <div className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 border-l-4 border-primary-500 pl-4 py-1 flex flex-col gap-2">
                       {activeQuestion.explanation ? (
-                        renderTextWithSlots(activeQuestion.explanation, 'explanation')
+                        <div>{renderTextWithSlots(activeQuestion.explanation, 'explanation')}</div>
                       ) : (
                         <p className="text-slate-400 italic">No explanation was provided for this question.</p>
+                      )}
+                      {activeQuestion.solutionImage && 
+                       !/\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi.test(activeQuestion.explanation || '') && 
+                       !((activeQuestion.explanation || '').includes('[SOLUTION_IMAGE_SLOT]')) && (
+                        <div className="mt-2 block">
+                          <img 
+                            src={activeQuestion.solutionImage.startsWith('/') ? `http://localhost:5000${activeQuestion.solutionImage}` : activeQuestion.solutionImage} 
+                            alt="Solution diagram"
+                            className="max-h-56 rounded-xl object-contain border border-slate-200 dark:border-slate-800 bg-white"
+                          />
+                        </div>
                       )}
                     </div>
                   </div>
