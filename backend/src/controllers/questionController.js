@@ -881,13 +881,14 @@ exports.uploadSlotImage = async (req, res) => {
     if (!question) return res.status(404).json({ success: false, error: 'Question not found' });
 
     const { slotId } = req.params;
+    const uploadResult = await uploadImageFile(req.file);
+
     const slotIndex = question.imageSlots.findIndex(s => s.slotId === slotId);
     if (slotIndex === -1) {
-      return res.status(400).json({ success: false, error: `Image slot '${slotId}' does not exist` });
+      question.imageSlots.push({ slotId, url: uploadResult.url });
+    } else {
+      question.imageSlots[slotIndex].url = uploadResult.url;
     }
-
-    const uploadResult = await uploadImageFile(req.file);
-    question.imageSlots[slotIndex].url = uploadResult.url;
 
     const slotIdMap = {
       'questionText_0': 'questionImage', 'optionA_0': 'optionAImage',
