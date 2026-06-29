@@ -133,6 +133,285 @@ const QuestionManager = () => {
   // ── Edit form ──
   const [editForm, setEditForm] = useState({});
 
+  // ── Bulk delete & Selection states ──
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAll = () => {
+    const pageIds = questions.map(q => q._id);
+    const allSelected = pageIds.every(id => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)));
+    } else {
+      setSelectedIds(prev => [...new Set([...prev, ...pageIds])]);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setLoading(true);
+    try {
+      const res = await API.post('/questions/bulk-delete', { questionIds: selectedIds });
+      if (res.data.success) {
+        showToast(res.data.message || `Successfully deleted ${selectedIds.length} questions.`, 'success');
+        setSelectedIds([]);
+        setShowBulkDeleteConfirm(false);
+        fetchQuestions();
+      }
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Bulk delete failed.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Inline Edit states & helpers ──
+  const [editingId, setEditingId] = useState(null);
+
+  const startInlineEdit = (q) => {
+    setEditingId(q._id);
+    setEditForm({
+      title: q.title || '',
+      questionType: q.questionType || 'MCQ',
+      questionText: q.questionText,
+      optionA: q.options?.A?.text || '',
+      optionB: q.options?.B?.text || '',
+      optionC: q.options?.C?.text || '',
+      optionD: q.options?.D?.text || '',
+      correctAnswer: q.correctAnswer || '',
+      explanation: q.explanation || '',
+      difficulty: q.difficulty,
+      marks: q.marks || 4,
+      negativeMarks: q.negativeMarks || 1,
+      examType: q.examType || [],
+      tags: (q.tags || []).join(', '),
+      board: q.board || '',
+      questionBank: q.questionBank || '',
+      topic: q.topic || '',
+      questionImage: q.questionImage || null,
+      optionAImage: q.optionAImage || null,
+      optionBImage: q.optionBImage || null,
+      optionCImage: q.optionCImage || null,
+      optionDImage: q.optionDImage || null,
+      solutionImage: q.solutionImage || null,
+    });
+  };
+
+  const handleSaveInlineEdits = async (id, e) => {
+    if (e) e.preventDefault();
+    setSaving(true);
+    try {
+      const payload = {
+        ...editForm,
+        tags: editForm.tags ? editForm.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+      };
+      const res = await API.put(`/questions/${id}`, payload);
+      if (res.data.success) {
+        const detailRes = await API.get(`/questions/${id}`);
+        if (detailRes.data.success) {
+          const updated = detailRes.data.question;
+          setQuestions(qs => qs.map(q => q._id === updated._id ? updated : q));
+          setEditingId(null);
+          showToast('Question updated successfully!');
+        }
+      }
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to save edits.', 'error');
+    } finally { setSaving(false); }
+  };
+
+  const handleImgUploadForCard = async (id, fieldName, file) => {
+    setLoadingField(`${id}_${fieldName}`);
+    const fd = new FormData();
+    fd.append('image', file);
+    try {
+      const res = await API.post(`/questions/${id}/image-fields/${fieldName}`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success) {
+        const updated = res.data.question;
+        setQuestions(qs => qs.map(q => q._id === updated._id ? updated : q));
+        setEditForm(f => ({ ...f, [fieldName]: res.data.url }));
+        showToast('Image uploaded!');
+      }
+    } catch (err) {
+      console.error(err);
+      const errMsg = err.response?.data?.error || err.message || 'Image upload failed';
+      showToast(errMsg, 'error');
+    }
+    finally { setLoadingField(null); }
+  };
+
+  const handleImgDeleteForCard = async (id, fieldName) => {
+    try {
+      const res = await API.delete(`/questions/${id}/image-fields/${fieldName}`);
+      if (res.data.success) {
+        const updated = res.data.question;
+        setQuestions(qs => qs.map(q => q._id === updated._id ? updated : q));
+        setEditForm(f => ({ ...f, [fieldName]: null }));
+        showToast('Image removed.');
+      }
+    } catch { showToast('Delete failed.', 'error'); }
+  };
+
+  const renderTextWithSlotsForCard = (text, prefix, q) => {
+    if (!text) return null;
+    const regex = /\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi;
+    
+    const hasExplicitSlots = regex.test(text);
+    let processedText = text;
+    if (!hasExplicitSlots) {
+      const slotId = `${prefix}_0`;
+      const slot = q?.imageSlots?.find(s => s.slotId === slotId);
+      if (slot && slot.url) {
+        processedText = processedText + ' [[IMAGE SLOT]]';
+      } else {
+        return text;
+      }
+    }
+    
+    const parts = processedText.split(regex);
+    const finalElements = [];
+    
+    for (let p = 0; p < parts.length; p++) {
+      finalElements.push(<span key={`txt_${p}`}>{parts[p]}</span>);
+      if (p < parts.length - 1) {
+        const slotId = `${prefix}_${p}`;
+        const slot = q?.imageSlots?.find(s => s.slotId === slotId);
+        if (slot && slot.url) {
+          finalElements.push(
+            <span key={`img_${p}`} className="block my-3">
+              <img 
+                src={imgUrl(slot.url)} 
+                alt={slotId} 
+                className="max-h-56 rounded-xl object-contain border border-slate-200 dark:border-slate-800 bg-white cursor-zoom-in"
+                onClick={() => setZoomedImg(imgUrl(slot.url))}
+              />
+            </span>
+          );
+        } else {
+          finalElements.push(
+            <span key={`pending_${p}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-400 font-mono my-2">
+              [ Diagram pending admin upload ]
+            </span>
+          );
+        }
+      }
+    }
+    return <span>{finalElements}</span>;
+  };
+
+  const renderEditableTextWithSlotsForCard = (text, prefix, q) => {
+    if (!text) return null;
+    const regex = /\[\[(?:IMG|IMAGE)[ _]SLOT\]\]/gi;
+    
+    const hasExplicitSlots = regex.test(text);
+    let processedText = text;
+    if (!hasExplicitSlots) {
+      processedText = processedText + ' [[IMAGE SLOT]]';
+    }
+    
+    const parts = processedText.split(regex);
+    const elements = [];
+    
+    for (let p = 0; p < parts.length; p++) {
+      elements.push(<span key={`text_${p}`}>{parts[p]}</span>);
+      if (p < parts.length - 1) {
+        const slotId = `${prefix}_${p}`;
+        const slot = q?.imageSlots?.find(s => s.slotId === slotId);
+        const imageUrl = slot ? slot.url : null;
+        
+        elements.push(
+          <span key={`slot_${p}`} className="inline-block mx-1.5 align-middle">
+            {imageUrl ? (
+              <div className="relative group inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white p-1 max-w-[200px]">
+                <img 
+                  src={imageUrl.startsWith('/') ? `${backendUrl}${imageUrl}` : imageUrl} 
+                  alt={slotId} 
+                  className="h-8 w-12 object-contain rounded border bg-white cursor-zoom-in"
+                  onClick={() => setZoomedImg(imgUrl(imageUrl))}
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (window.confirm('Are you sure you want to remove this slot image?')) {
+                      try {
+                        const res = await API.delete(`/questions/${q._id}/slots/${slotId}`);
+                        if (res.data.success) {
+                          const detailRes = await API.get(`/questions/${q._id}`);
+                          if (detailRes.data.success) {
+                            const updated = detailRes.data.question;
+                            setQuestions(qs => qs.map(x => x._id === updated._id ? updated : x));
+                            showToast('Slot image removed.');
+                          }
+                        }
+                      } catch { showToast('Image removal failed', 'error'); }
+                    }
+                  }}
+                  className="px-1.5 py-0.5 bg-danger-50 hover:bg-danger-100 text-danger-600 rounded text-[9px] font-bold cursor-pointer"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <label className="border border-dashed border-primary-300 bg-primary-50/20 hover:bg-primary-50 dark:border-primary-800 dark:bg-primary-950/20 rounded-lg px-2 py-0.5 flex items-center justify-center cursor-pointer hover:border-primary-400 transition-all select-none">
+                {loadingField === `slot_${q._id}_${slotId}` ? (
+                  <Loader2 className="animate-spin text-primary-500" size={10} />
+                ) : (
+                  <span className="text-[10px] font-bold text-primary-500 flex items-center gap-1">
+                    📷 Click to upload slot
+                  </span>
+                )}
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  className="hidden" 
+                  disabled={loadingField === `slot_${q._id}_${slotId}`}
+                  onChange={async (e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setLoadingField(`slot_${q._id}_${slotId}`);
+                      const fd = new FormData();
+                      fd.append('image', e.target.files[0]);
+                      try {
+                        const res = await API.post(`/questions/${q._id}/slots/${slotId}`, fd, {
+                          headers: { 'Content-Type': 'multipart/form-data' }
+                        });
+                        if (res.data.success) {
+                          const detailRes = await API.get(`/questions/${q._id}`);
+                          if (detailRes.data.success) {
+                            const updated = detailRes.data.question;
+                            setQuestions(qs => qs.map(x => x._id === updated._id ? updated : x));
+                            showToast('Slot image uploaded!');
+                          }
+                        }
+                      } catch (err) {
+                        console.error(err);
+                        const errMsg = err.response?.data?.error || err.message || 'Image upload failed';
+                        showToast(errMsg, 'error');
+                      }
+                      finally { setLoadingField(null); }
+                    }
+                  }} 
+                />
+              </label>
+            )}
+          </span>
+        );
+      }
+    }
+    
+    return (
+      <div className="p-2.5 border border-slate-100 dark:border-slate-800/80 rounded-xl bg-slate-50/30 dark:bg-slate-900/10 text-xs text-slate-700 dark:text-slate-350 leading-normal my-2">
+        <span className="text-[9px] font-bold text-primary-400 block mb-1 uppercase tracking-wider">Inline Layout Preview (Click to upload):</span>
+        {elements}
+      </div>
+    );
+  };
+
   // ── Toast ──
   const [toast, setToast] = useState(null);
   const showToast = (msg, type = 'success') => {
@@ -630,113 +909,386 @@ const QuestionManager = () => {
         )}
       </div>
 
-      {/* ── Question Table ──────────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="py-20 flex flex-col items-center gap-3">
-            <Loader2 className="animate-spin text-primary-500" size={36} />
-            <p className="text-slate-400 text-sm font-semibold">Loading question bank...</p>
+      {/* ── Question Cards List ────────────────────────────────────────────────── */}
+      <div className="space-y-4">
+        {/* Bulk Action Bar */}
+        {selectedIds.length > 0 && (
+          <div className="flex items-center justify-between p-4 bg-rose-50 dark:bg-rose-955/20 border border-rose-200 dark:border-rose-900/30 rounded-2xl animate-fade-in shadow-sm">
+            <span className="text-sm font-bold text-rose-800 dark:text-rose-400">
+              Selected {selectedIds.length} question(s)
+            </span>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setSelectedIds([])}
+                className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Clear Selection
+              </button>
+              <button 
+                onClick={() => setShowBulkDeleteConfirm(true)}
+                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-rose-600/20 transition-all cursor-pointer"
+              >
+                <Trash2 size={13} /> Delete Selected
+              </button>
+            </div>
           </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th className="w-16">Q.No</th>
-                    <th>Question</th>
-                    <th>Subject / Chapter</th>
-                    <th>Type</th>
-                    <th>Difficulty</th>
-                    <th>Exams</th>
-                    <th className="text-center w-24">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {questions.length > 0 ? questions.map(q => (
-                    <tr key={q._id} className="cursor-pointer" onClick={() => openDetail(q)}>
-                      <td className="font-extrabold text-slate-700 dark:text-slate-200">Q{q.questionNumber}</td>
-                      <td className="max-w-[260px]">
-                        <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">{q.questionText}</p>
-                        {q.tags?.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {q.tags.slice(0,3).map(t => (
-                              <span key={t} className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded text-[9px] font-semibold">{t}</span>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{q.subject?.name || '—'}</p>
-                        <p className="text-[10px] text-slate-400 truncate max-w-[140px]">{q.chapter?.name}</p>
-                      </td>
-                      <td>
-                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-md text-[11px] font-bold">
-                          {q.questionType || 'MCQ'}
-                        </span>
-                      </td>
-                      <td>
-                        {updatingDiffId === q._id
-                          ? <Loader2 size={14} className="animate-spin text-primary-500" />
-                          : <DiffBadge value={q.difficulty} onClick={(e) => cycleDiff(q, e)} />}
-                      </td>
-                      <td>
-                        <div className="flex flex-wrap gap-0.5 max-w-[120px]">
-                          {(q.examType || []).map(et => (
-                            <span key={et} className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded text-[10px] font-bold">{et}</span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="text-center" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button onClick={() => openDetail(q)} className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary-500 transition-colors cursor-pointer">
-                            <Eye size={13} />
-                          </button>
-                          <button onClick={() => setDeleteConfirm(q)} className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-rose-400 hover:text-rose-600 transition-colors cursor-pointer">
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr>
-                      <td colSpan={7} className="py-20 text-center text-slate-400 text-sm">
-                        No questions match the filters. Try broadening your search.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            <div className="flex items-center justify-between px-4 py-3.5 border-t border-slate-100 dark:border-slate-800">
-              <p className="text-xs text-slate-400 font-medium">
-                {total.toLocaleString()} questions · Page {currentPage} of {pages}
-              </p>
-              <div className="flex gap-1.5 items-center">
-                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                  className="btn-secondary py-1.5 px-2.5 disabled:opacity-40">
-                  <ChevronLeft size={14} />
-                </button>
-                {[...Array(Math.min(5, pages))].map((_, i) => {
-                  const pg = Math.max(1, currentPage - 2) + i;
-                  if (pg > pages) return null;
-                  return (
-                    <button key={pg} onClick={() => setCurrentPage(pg)}
-                      className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${pg === currentPage ? 'bg-primary-500 text-white' : 'btn-secondary py-0 px-0'}`}>
-                      {pg}
-                    </button>
-                  );
-                })}
-                <button onClick={() => setCurrentPage(p => Math.min(pages, p + 1))} disabled={currentPage === pages}
-                  className="btn-secondary py-1.5 px-2.5 disabled:opacity-40">
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            </div>
-          </>
         )}
+
+        <div className="space-y-4">
+          {loading ? (
+            <div className="bg-white dark:bg-slate-905 border border-slate-205 dark:border-slate-805 rounded-2xl py-20 flex flex-col items-center gap-3 shadow-sm">
+              <Loader2 className="animate-spin text-primary-500" size={36} />
+              <p className="text-slate-400 text-sm font-semibold">Loading question bank...</p>
+            </div>
+          ) : (
+            <>
+              {/* Select All on Page Checkbox */}
+              {questions.length > 0 && (
+                <div className="flex items-center justify-between px-2 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-500 dark:text-slate-400">
+                    <input 
+                      type="checkbox"
+                      checked={questions.length > 0 && questions.every(q => selectedIds.includes(q._id))}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-primary-500 focus:ring-primary-500 cursor-pointer"
+                    />
+                    <span>Select All on Page</span>
+                  </label>
+                </div>
+              )}
+
+              {questions.length > 0 ? (
+                <div className="space-y-4">
+                  {questions.map(q => {
+                    const isEditing = editingId === q._id;
+                    
+                    return (
+                      <div 
+                        key={q._id} 
+                        className={`bg-white dark:bg-slate-900 border ${
+                          isEditing ? 'border-amber-400 ring-2 ring-amber-400/25' : 'border-slate-205 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700'
+                        } rounded-2xl p-5 shadow-sm space-y-4 transition-all`}
+                      >
+                        {/* Card Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="checkbox"
+                              checked={selectedIds.includes(q._id)}
+                              onChange={() => toggleSelect(q._id)}
+                              className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-primary-500 focus:ring-primary-500 cursor-pointer"
+                            />
+                            <span className="font-extrabold text-slate-700 dark:text-slate-200 text-sm">
+                              Q{q.questionNumber}
+                            </span>
+                            
+                            <div className="flex flex-wrap gap-1">
+                              {q.subject?.name && (
+                                <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-md text-[10px] font-bold">
+                                  {q.subject.name}
+                                </span>
+                              )}
+                              {q.chapter?.name && (
+                                <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-450 rounded-md text-[10px]">
+                                  {q.chapter.name}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 self-end sm:self-auto">
+                            <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-md text-[10px] font-bold">
+                              {q.questionType || 'MCQ'}
+                            </span>
+
+                            {updatingDiffId === q._id ? (
+                              <Loader2 size={12} className="animate-spin text-primary-500" />
+                            ) : (
+                              <DiffBadge value={q.difficulty} onClick={(e) => cycleDiff(q, e)} />
+                            )}
+
+                            <div className="flex items-center gap-1.5">
+                              {isEditing ? (
+                                <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider animate-pulse">Editing</span>
+                              ) : (
+                                <>
+                                  <button 
+                                    onClick={() => startInlineEdit(q)}
+                                    className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-500 hover:text-amber-550 transition-colors cursor-pointer"
+                                    title="Edit Inline"
+                                  >
+                                    <Edit size={13} />
+                                  </button>
+                                  <button 
+                                    onClick={() => setDeleteConfirm(q)}
+                                    className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-955/30 text-rose-450 hover:text-rose-600 transition-colors cursor-pointer"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card Body */}
+                        {!isEditing ? (
+                          /* ── View Mode ── */
+                          <div className="space-y-4">
+                            {/* Question text */}
+                            <div className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed secure-content">
+                              {q.questionImage && (
+                                <img 
+                                  src={imgUrl(q.questionImage)} 
+                                  alt="Q" 
+                                  className="max-h-48 rounded-xl mb-3 border border-slate-200 dark:border-slate-800 object-contain bg-white cursor-zoom-in" 
+                                  onClick={() => setZoomedImg(imgUrl(q.questionImage))} 
+                                />
+                              )}
+                              {renderTextWithSlotsForCard(q.questionText, 'questionText', q)}
+                            </div>
+
+                            {/* MCQ Options */}
+                            {q.options && (q.questionType === 'MCQ' || !q.questionType) && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                                {['A', 'B', 'C', 'D'].map(opt => {
+                                  const text = q.options?.[opt]?.text;
+                                  const img = q.options?.[opt]?.image;
+                                  if (!text && !img) return null;
+                                  
+                                  const isCorrect = q.correctAnswer === opt;
+                                  return (
+                                    <div 
+                                      key={opt} 
+                                      className={`flex items-start gap-2.5 p-3 rounded-xl border transition-all ${
+                                        isCorrect 
+                                          ? 'border-emerald-250 bg-emerald-50/20 dark:border-emerald-800/30 dark:bg-emerald-955/10' 
+                                          : 'border-slate-100 dark:border-slate-800/60 bg-slate-50/30 dark:bg-slate-900/10'
+                                      }`}
+                                    >
+                                      <span className={`w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-extrabold shrink-0 ${
+                                        isCorrect 
+                                          ? 'bg-emerald-500 text-white' 
+                                          : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                                      }`}>
+                                        {opt}
+                                      </span>
+                                      <div className="flex-1">
+                                        {img && (
+                                          <img 
+                                            src={imgUrl(img)} 
+                                            alt={`Option ${opt}`} 
+                                            className="h-10 mb-1 rounded-lg object-contain cursor-zoom-in" 
+                                            onClick={() => setZoomedImg(imgUrl(img))} 
+                                          />
+                                        )}
+                                        <div className="text-xs text-slate-700 dark:text-slate-300 leading-normal">
+                                          {renderTextWithSlotsForCard(text, `option${opt}`, q)}
+                                        </div>
+                                      </div>
+                                      {isCorrect && <CheckCircle size={14} className="text-emerald-500 shrink-0" />}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Explanation */}
+                            {q.explanation && (
+                              <div className="p-3.5 bg-sky-50/30 dark:bg-sky-955/10 border border-sky-100 dark:border-sky-900/20 rounded-xl text-xs">
+                                <span className="text-[10px] font-extrabold text-sky-600 dark:text-sky-400 block mb-1 uppercase tracking-wider">Solution / Explanation</span>
+                                {q.solutionImage && (
+                                  <img 
+                                    src={imgUrl(q.solutionImage)} 
+                                    alt="Solution" 
+                                    className="max-h-40 rounded-lg mb-2 object-contain cursor-zoom-in" 
+                                    onClick={() => setZoomedImg(imgUrl(q.solutionImage))} 
+                                  />
+                                )}
+                                <div className="text-slate-600 dark:text-slate-350 leading-relaxed secure-content">
+                                  {renderTextWithSlotsForCard(q.explanation, 'explanation', q)}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Metadata Footer Row */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 text-[10px] text-slate-400 border-t border-slate-100 dark:border-slate-800/80 pt-2.5">
+                              <div className="flex flex-wrap gap-2">
+                                {q.board && <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md font-semibold text-slate-500">Board: {q.board}</span>}
+                                {q.examType?.map(et => (
+                                  <span key={et} className="bg-primary-50 dark:bg-primary-950/20 text-primary-500 px-2 py-0.5 rounded-md font-bold">{et}</span>
+                                ))}
+                                {q.tags?.map(t => (
+                                  <span key={t} className="bg-slate-50 dark:bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-100 dark:border-slate-800/60">#{t}</span>
+                                ))}
+                              </div>
+                              <span className="font-semibold">{new Date(q.createdDate).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          /* ── Inline Edit Mode ── */
+                          <form onSubmit={(e) => handleSaveInlineEdits(q._id, e)} className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div>
+                                <label className="input-label text-[10px]">Question Type</label>
+                                <select 
+                                  className="input-field py-1 text-xs" 
+                                  value={editForm.questionType} 
+                                  onChange={e => setEditForm(f => ({ ...f, questionType: e.target.value }))}
+                                >
+                                  {QUESTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="input-label text-[10px]">Correct Answer</label>
+                                <input 
+                                  type="text" 
+                                  className="input-field py-1 text-xs" 
+                                  value={editForm.correctAnswer} 
+                                  onChange={e => setEditForm(f => ({ ...f, correctAnswer: e.target.value }))} 
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="input-label text-[10px]">Marks</label>
+                                  <input 
+                                    type="number" 
+                                    className="input-field py-1 text-xs" 
+                                    value={editForm.marks} 
+                                    onChange={e => setEditForm(f => ({ ...f, marks: e.target.value }))} 
+                                  />
+                                </div>
+                                <div>
+                                  <label className="input-label text-[10px]">Neg Marks</label>
+                                  <input 
+                                    type="number" 
+                                    className="input-field py-1 text-xs" 
+                                    value={editForm.negativeMarks} 
+                                    onChange={e => setEditForm(f => ({ ...f, negativeMarks: e.target.value }))} 
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="input-label text-[10px]">Question Text</label>
+                              <textarea 
+                                className="input-field text-xs resize-y" 
+                                rows={3} 
+                                value={editForm.questionText} 
+                                onChange={e => setEditForm(f => ({ ...f, questionText: e.target.value }))} 
+                              />
+                              {renderEditableTextWithSlotsForCard(editForm.questionText, 'questionText', q)}
+                            </div>
+
+                            {['A', 'B', 'C', 'D'].map(opt => (
+                              <div key={opt}>
+                                <label className="input-label text-[10px]">Option {opt}</label>
+                                <input 
+                                  type="text" 
+                                  className="input-field py-1.5 text-xs" 
+                                  value={editForm[`option${opt}`]} 
+                                  onChange={e => setEditForm(f => ({ ...f, [`option${opt}`]: e.target.value }))} 
+                                />
+                                {renderEditableTextWithSlotsForCard(editForm[`option${opt}`], `option${opt}`, q)}
+                              </div>
+                            ))}
+
+                            <div>
+                              <label className="input-label text-[10px]">Explanation Solution</label>
+                              <textarea 
+                                className="input-field text-xs resize-y" 
+                                rows={2} 
+                                value={editForm.explanation} 
+                                onChange={e => setEditForm(f => ({ ...f, explanation: e.target.value }))} 
+                              />
+                              {renderEditableTextWithSlotsForCard(editForm.explanation, 'explanation', q)}
+                            </div>
+
+                            {/* Image slots inside the card */}
+                            <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3">
+                              <label className="input-label text-[10px] mb-2 block">Upload / Edit Images</label>
+                              <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+                                {[
+                                  { key: 'questionImage',  label: 'Q. Image' },
+                                  { key: 'optionAImage',   label: 'Option A' },
+                                  { key: 'optionBImage',   label: 'Option B' },
+                                  { key: 'optionCImage',   label: 'Option C' },
+                                  { key: 'optionDImage',   label: 'Option D' },
+                                  { key: 'solutionImage',  label: 'Solution' },
+                                ].map(({ key, label }) => (
+                                  <ImageSlot 
+                                    key={key} 
+                                    label={label}
+                                    imageUrl={editForm[key]}
+                                    onUpload={file => handleImgUploadForCard(q._id, key, file)}
+                                    onDelete={() => handleImgDeleteForCard(q._id, key)}
+                                    onZoom={url => setZoomedImg(url)}
+                                    loading={loadingField === `${q._id}_${key}`}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 pt-2">
+                              <button 
+                                type="submit" 
+                                disabled={saving} 
+                                className="btn-primary py-2 px-4 justify-center text-xs"
+                              >
+                                {saving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                                Save Card Changes
+                              </button>
+                              <button 
+                                type="button" 
+                                onClick={() => setEditingId(null)} 
+                                className="btn-secondary py-2 px-4 text-xs"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </form>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 rounded-2xl py-20 text-center text-slate-400 text-sm shadow-sm">
+                  No questions match the filters. Try broadening your search.
+                </div>
+              )}
+
+              {/* Pagination */}
+              <div className="flex items-center justify-between px-4 py-3.5 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-sm mt-4">
+                <p className="text-xs text-slate-400 font-medium">
+                  {total.toLocaleString()} questions · Page {currentPage} of {pages}
+                </p>
+                <div className="flex gap-1.5 items-center">
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                    className="btn-secondary py-1.5 px-2.5 disabled:opacity-40">
+                    <ChevronLeft size={14} />
+                  </button>
+                  {[...Array(Math.min(5, pages))].map((_, i) => {
+                    const pg = Math.max(1, currentPage - 2) + i;
+                    if (pg > pages) return null;
+                    return (
+                      <button key={pg} onClick={() => setCurrentPage(pg)}
+                        className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${pg === currentPage ? 'bg-primary-500 text-white' : 'btn-secondary py-0 px-0'}`}>
+                        {pg}
+                      </button>
+                    );
+                  })}
+                  <button onClick={() => setCurrentPage(p => Math.min(pages, p + 1))} disabled={currentPage === pages}
+                    className="btn-secondary py-1.5 px-2.5 disabled:opacity-40">
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ── Question Detail Slide-over ──────────────────────────────────────── */}
@@ -1122,7 +1674,7 @@ const QuestionManager = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setDeleteConfirm(null)} />
           <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full animate-scale-in">
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/30 flex items-center justify-center mx-auto mb-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-955/30 flex items-center justify-center mx-auto mb-4">
               <Trash2 size={22} className="text-rose-500" />
             </div>
             <h3 className="text-center font-bold text-slate-800 dark:text-white mb-2">Delete Question?</h3>
@@ -1134,6 +1686,28 @@ const QuestionManager = () => {
                 <Trash2 size={14} /> Delete
               </button>
               <button onClick={() => setDeleteConfirm(null)} className="btn-secondary flex-1 justify-center">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk Delete Confirm Modal ────────────────────────────────────────── */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setShowBulkDeleteConfirm(false)} />
+          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full animate-scale-in">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-955/30 flex items-center justify-center mx-auto mb-4">
+              <Trash2 size={22} className="text-rose-500" />
+            </div>
+            <h3 className="text-center font-bold text-slate-800 dark:text-white mb-2">Delete {selectedIds.length} Questions?</h3>
+            <p className="text-center text-slate-500 dark:text-slate-400 text-sm mb-5">
+              You are about to permanently delete {selectedIds.length} selected questions. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={handleBulkDelete} className="btn-danger flex-1 justify-center">
+                <Trash2 size={14} /> Delete All
+              </button>
+              <button onClick={() => setShowBulkDeleteConfirm(false)} className="btn-secondary flex-1 justify-center">Cancel</button>
             </div>
           </div>
         </div>
