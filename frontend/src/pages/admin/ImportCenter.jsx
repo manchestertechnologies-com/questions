@@ -871,6 +871,7 @@ const ImportCenter = () => {
                       className="text-xs text-danger-500 font-semibold hover:text-danger-600 cursor-pointer"
                     >
                       Discard
+                    </button>
                   </div>
                 </div>
 
