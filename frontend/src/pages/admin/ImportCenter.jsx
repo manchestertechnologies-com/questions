@@ -2,6 +2,62 @@ import React, { useState, useEffect } from 'react';
 import API, { getBackendUrl } from '../../services/api';
 
 const backendUrl = getBackendUrl();
+
+const tryExtractJson = (text) => {
+  const trimmed = text.trim();
+  
+  // Try direct parse first
+  try {
+    return JSON.parse(trimmed);
+  } catch (e) {
+    // ignore
+  }
+
+  // Try stripping markdown blocks (e.g. ```json ... ```)
+  let clean = trimmed;
+  if (clean.startsWith('```')) {
+    const lines = clean.split('\n');
+    if (lines[0].startsWith('```')) {
+      lines.shift();
+      if (lines[lines.length - 1].trim() === '```') {
+        lines.pop();
+      }
+      clean = lines.join('\n').trim();
+    }
+  }
+
+  try {
+    return JSON.parse(clean);
+  } catch (e) {
+    // ignore
+  }
+
+  // Try searching for first '[' and last ']'
+  const firstBracket = trimmed.indexOf('[');
+  const lastBracket = trimmed.lastIndexOf(']');
+  if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+    try {
+      const candidates = trimmed.slice(firstBracket, lastBracket + 1);
+      return JSON.parse(candidates);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // Try searching for first '{' and last '}'
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      const candidates = trimmed.slice(firstBrace, lastBrace + 1);
+      return JSON.parse(candidates);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  return null;
+};
 import { 
   Upload, 
   File, 
@@ -264,16 +320,8 @@ const ImportCenter = () => {
       return;
     }
 
-    let isJson = false;
-    let parsedData = null;
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-      try {
-        parsedData = JSON.parse(trimmed);
-        isJson = true;
-      } catch (err) {
-        // Not valid JSON, will fallback to raw text parsing
-      }
-    }
+    const parsedData = tryExtractJson(trimmed);
+    const isJson = parsedData !== null;
 
     if (!isJson && (!selectedSubject || !selectedChapter || !selectedConcept)) {
       setErrorMessage('Please select Subject, Chapter, and Concept before importing.');
