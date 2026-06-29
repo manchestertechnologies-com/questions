@@ -1019,7 +1019,7 @@ exports.bulkSaveQuestions = async (req, res) => {
     await logActivity(req, 'IMPORT_QUESTIONS', `Bulk saved ${savedQuestions.length} questions`,
       null, 'info', { count: savedQuestions.length });
 
-    res.status(201).json({ success: true, count: savedQuestions.length, questions: savedQuestions });
+    res.status(201).json({ success: true, count: savedQuestions.length });
   } catch (error) {
     console.error('Bulk save error:', error);
     res.status(500).json({ success: false, error: error.message });
