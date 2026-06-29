@@ -1281,8 +1281,8 @@ const ImportCenter = () => {
                 <textarea
                   value={pastedJson}
                   onChange={(e) => setPastedJson(e.target.value)}
-                  placeholder={`Paste structured JSON or raw question text here.\n\nJSON Example (with image slot):\n[\n  {\n    "questionNumber": 1,\n    "questionText": "Find the current in the circuit [[IMAGE SLOT]]",\n    "options": {\n      "A": "10 m/s²",\n      "B": "5 m/s²"\n    },\n    "correctAnswer": "B",\n    "explanation": "Apply Ohm's law to the loop [[IMAGE SLOT]]"\n  }\n]\n\nRaw Text Example (with image slot):\nQuestion 1\nFind the value of x in the diagram.\n[[IMAGE SLOT]]\nA) 2A\nB) 4A\nCorrect: B`}
-                  rows={8}
+                  placeholder={`Paste structured JSON or raw question text here.\n\nJSON Example (with image slot and optional syllabus parameters):\n[\n  {\n    "questionNumber": 1,\n    "questionText": "Find the current in the circuit [[IMAGE SLOT]]",\n    "options": {\n      "A": "2 A",\n      "B": "4 A",\n      "C": "6 A",\n      "D": "8 A"\n    },\n    "correctAnswer": "B",\n    "explanation": "Apply Ohm's law to the loop [[IMAGE SLOT]]",\n    "subject": "Physics",\n    "classNum": 12,\n    "chapter": "Electrostatics",\n    "concept": "Gauss's Law",\n    "subConcept": "Conducting Shells"\n  }\n]\n\nRaw Text Example:\nQuestion 1\nFind the value of x in the diagram.\n[[IMAGE SLOT]]\nA) 2A\nB) 4A\nCorrect: B`}
+                  rows={10}
                   className="w-full p-4 bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-[11px] font-mono text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-slate-400 dark:placeholder-slate-700 leading-normal"
                 />
               </div>
