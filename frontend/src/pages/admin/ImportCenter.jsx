@@ -223,7 +223,9 @@ const ImportCenter = () => {
       setErrorMessage('Please select a file to import.');
       return;
     }
-    if (!selectedSubject || !selectedChapter || !selectedConcept) {
+
+    const isJsonFile = file.name.toLowerCase().endsWith('.json');
+    if (!isJsonFile && (!selectedSubject || !selectedChapter || !selectedConcept)) {
       setErrorMessage('Please select Subject, Chapter, and Concept before importing.');
       return;
     }
@@ -256,20 +258,12 @@ const ImportCenter = () => {
 
   const handleParsePasteJson = async (e) => {
     e.preventDefault();
-    if (!pastedJson.trim()) {
+    const trimmed = pastedJson.trim();
+    if (!trimmed) {
       setErrorMessage('Please paste some JSON/Text to parse.');
       return;
     }
-    if (!selectedSubject || !selectedChapter || !selectedConcept) {
-      setErrorMessage('Please select Subject, Chapter, and Concept before importing.');
-      return;
-    }
 
-    setLoading(true);
-    setErrorMessage(null);
-    setStatusMessage(null);
-
-    const trimmed = pastedJson.trim();
     let isJson = false;
     let parsedData = null;
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
@@ -280,6 +274,15 @@ const ImportCenter = () => {
         // Not valid JSON, will fallback to raw text parsing
       }
     }
+
+    if (!isJson && (!selectedSubject || !selectedChapter || !selectedConcept)) {
+      setErrorMessage('Please select Subject, Chapter, and Concept before importing.');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
 
     if (isJson && parsedData) {
       try {
@@ -349,7 +352,7 @@ const ImportCenter = () => {
             imageSlots,
             difficulty: item.difficulty || 'Easy',
             examType: Array.isArray(item.examType) ? item.examType : [item.examType || 'Board'],
-            classNum: item.classNum || 11,
+            classNum: item.classNum || null,
             marks: typeof item.marks === 'number' ? item.marks : 4,
             negativeMarks: typeof item.negativeMarks === 'number' ? item.negativeMarks : 1,
             questionImage: item.questionImage || null,
@@ -358,6 +361,10 @@ const ImportCenter = () => {
             optionCImage: item.optionCImage || null,
             optionDImage: item.optionDImage || null,
             solutionImage: item.solutionImage || null,
+            subject: item.subject || null,
+            chapter: item.chapter || null,
+            concept: item.concept || null,
+            subConcept: item.subConcept || null,
           };
         });
         

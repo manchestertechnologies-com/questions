@@ -133,7 +133,7 @@ const resolveOrCreateSyllabus = async (q, defaults) => {
   classNum = parseInt(classNum, 10) || 11;
 
   // 2. Resolve Subject
-  let subjectId = defaults.subjectId;
+  let subjectId = defaults.subjectId || null;
   const rawSubject = q.subject; // can be name or ObjectId
   if (rawSubject) {
     if (mongoose.Types.ObjectId.isValid(rawSubject)) {
@@ -152,7 +152,7 @@ const resolveOrCreateSyllabus = async (q, defaults) => {
   }
 
   // 3. Resolve Chapter
-  let chapterId = defaults.chapterId;
+  let chapterId = defaults.chapterId || null;
   const rawChapter = q.chapter;
   if (rawChapter && subjectId) {
     if (mongoose.Types.ObjectId.isValid(rawChapter)) {
@@ -171,7 +171,7 @@ const resolveOrCreateSyllabus = async (q, defaults) => {
   }
 
   // 4. Resolve Concept
-  let conceptId = defaults.conceptId;
+  let conceptId = defaults.conceptId || null;
   const rawConcept = q.concept;
   if (rawConcept && chapterId) {
     if (mongoose.Types.ObjectId.isValid(rawConcept)) {
@@ -190,7 +190,7 @@ const resolveOrCreateSyllabus = async (q, defaults) => {
   }
 
   // 5. Resolve SubConcept
-  let subConceptId = defaults.subConceptId;
+  let subConceptId = defaults.subConceptId || null;
   const rawSubConcept = q.subConcept;
   if (rawSubConcept && conceptId) {
     if (mongoose.Types.ObjectId.isValid(rawSubConcept)) {
