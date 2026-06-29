@@ -1118,7 +1118,6 @@ const ImportCenter = () => {
                 <select 
                   value={selectedSubject} 
                   onChange={(e) => setSelectedSubject(e.target.value)}
-                  required
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 dark:text-slate-200"
                 >
                   <option value="">Select Subject</option>
@@ -1134,7 +1133,6 @@ const ImportCenter = () => {
                 <select 
                   value={selectedChapter} 
                   onChange={(e) => setSelectedChapter(e.target.value)}
-                  required
                   disabled={!selectedSubject}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 dark:text-slate-200 disabled:opacity-50"
                 >
@@ -1151,7 +1149,6 @@ const ImportCenter = () => {
                 <select 
                   value={selectedConcept} 
                   onChange={(e) => setSelectedConcept(e.target.value)}
-                  required
                   disabled={!selectedChapter}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-slate-800 dark:text-slate-200 disabled:opacity-50"
                 >
