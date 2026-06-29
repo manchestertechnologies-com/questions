@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const mongoose = require('mongoose');
 const Question = require('../models/Question');
 const QuestionImage = require('../models/QuestionImage');
 const QuestionStatistics = require('../models/QuestionStatistics');
@@ -114,6 +115,100 @@ const syncImageSlots = (text, prefix, existingSlots) => {
     slots.push({ slotId, url: match ? match.url : null });
   }
   return slots;
+};
+
+const escapeRegex = (string) => {
+  return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+};
+
+const resolveOrCreateSyllabus = async (q, defaults) => {
+  // 1. Determine class level
+  let classNum = defaults.classNum;
+  if (q.classNum) {
+    const parsedClass = parseInt(q.classNum, 10);
+    if (!isNaN(parsedClass) && [11, 12].includes(parsedClass)) {
+      classNum = parsedClass;
+    }
+  }
+  classNum = parseInt(classNum, 10) || 11;
+
+  // 2. Resolve Subject
+  let subjectId = defaults.subjectId;
+  const rawSubject = q.subject; // can be name or ObjectId
+  if (rawSubject) {
+    if (mongoose.Types.ObjectId.isValid(rawSubject)) {
+      subjectId = rawSubject;
+    } else {
+      const subjectName = rawSubject.toString().trim();
+      let subject = await Subject.findOne({
+        name: { $regex: new RegExp(`^${escapeRegex(subjectName)}$`, 'i') },
+        classNum
+      });
+      if (!subject) {
+        subject = await Subject.create({ name: subjectName, classNum });
+      }
+      subjectId = subject._id;
+    }
+  }
+
+  // 3. Resolve Chapter
+  let chapterId = defaults.chapterId;
+  const rawChapter = q.chapter;
+  if (rawChapter && subjectId) {
+    if (mongoose.Types.ObjectId.isValid(rawChapter)) {
+      chapterId = rawChapter;
+    } else {
+      const chapterName = rawChapter.toString().trim();
+      let chapter = await Chapter.findOne({
+        name: { $regex: new RegExp(`^${escapeRegex(chapterName)}$`, 'i') },
+        subject: subjectId
+      });
+      if (!chapter) {
+        chapter = await Chapter.create({ name: chapterName, subject: subjectId });
+      }
+      chapterId = chapter._id;
+    }
+  }
+
+  // 4. Resolve Concept
+  let conceptId = defaults.conceptId;
+  const rawConcept = q.concept;
+  if (rawConcept && chapterId) {
+    if (mongoose.Types.ObjectId.isValid(rawConcept)) {
+      conceptId = rawConcept;
+    } else {
+      const conceptName = rawConcept.toString().trim();
+      let concept = await Concept.findOne({
+        name: { $regex: new RegExp(`^${escapeRegex(conceptName)}$`, 'i') },
+        chapter: chapterId
+      });
+      if (!concept) {
+        concept = await Concept.create({ name: conceptName, chapter: chapterId });
+      }
+      conceptId = concept._id;
+    }
+  }
+
+  // 5. Resolve SubConcept
+  let subConceptId = defaults.subConceptId;
+  const rawSubConcept = q.subConcept;
+  if (rawSubConcept && conceptId) {
+    if (mongoose.Types.ObjectId.isValid(rawSubConcept)) {
+      subConceptId = rawSubConcept;
+    } else {
+      const subConceptName = rawSubConcept.toString().trim();
+      let subConcept = await SubConcept.findOne({
+        name: { $regex: new RegExp(`^${escapeRegex(subConceptName)}$`, 'i') },
+        concept: conceptId
+      });
+      if (!subConcept) {
+        subConcept = await SubConcept.create({ name: subConceptName, concept: conceptId });
+      }
+      subConceptId = subConcept._id;
+    }
+  }
+
+  return { subjectId, chapterId, conceptId, subConceptId, classNum };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -253,20 +348,55 @@ exports.importQuestions = async (req, res) => {
       return res.status(400).json({ success: false, error: 'No questions could be extracted from the file.' });
     }
 
-    const finalQuestions = parsedQuestions.map(q => ({
-      ...q,
-      subject, chapter, concept,
-      subConcept: subConcept || null,
-      classNum: classNum ? parseInt(classNum, 10) : null,
-      examType: Array.isArray(examType) ? examType : (examType ? [examType] : (q.examType || [])),
-      difficulty: null, // imported questions start unclassified
-      marks: parseInt(marks, 10) || q.marks || 4,
-      negativeMarks: parseInt(negativeMarks, 10) || q.negativeMarks || 1,
-      board: board || '',
-      questionBank: questionBank || '',
-      createdBy: req.user._id,
-      modifiedBy: req.user._id,
-    }));
+    const finalQuestions = [];
+    const defaults = {
+      subjectId: subject,
+      chapterId: chapter,
+      conceptId: concept,
+      subConceptId: subConcept,
+      classNum: classNum ? parseInt(classNum, 10) : null
+    };
+
+    for (const q of parsedQuestions) {
+      const resolved = await resolveOrCreateSyllabus(q, defaults);
+      
+      const slots = [];
+      if (q.questionImage) slots.push({ slotId: 'questionText_0', url: q.questionImage });
+      if (q.optionAImage)  slots.push({ slotId: 'optionA_0', url: q.optionAImage });
+      if (q.optionBImage)  slots.push({ slotId: 'optionB_0', url: q.optionBImage });
+      if (q.optionCImage)  slots.push({ slotId: 'optionC_0', url: q.optionCImage });
+      if (q.optionDImage)  slots.push({ slotId: 'optionD_0', url: q.optionDImage });
+      if (q.solutionImage) slots.push({ slotId: 'explanation_0', url: q.solutionImage });
+
+      finalQuestions.push({
+        questionNumber: parseInt(q.questionNumber, 10) || (finalQuestions.length + 1),
+        title: q.title || `Question ${q.questionNumber || (finalQuestions.length + 1)}`,
+        questionType: q.questionType || 'MCQ',
+        questionText: q.questionText || 'Question text placeholder',
+        options: {
+          A: { text: q.options?.A?.text || q.optionA || '', image: q.optionAImage || null },
+          B: { text: q.options?.B?.text || q.optionB || '', image: q.optionBImage || null },
+          C: { text: q.options?.C?.text || q.optionC || '', image: q.optionCImage || null },
+          D: { text: q.options?.D?.text || q.optionD || '', image: q.optionDImage || null },
+        },
+        correctAnswer: q.correctAnswer || 'A',
+        explanation: q.explanation || '',
+        imageSlots: slots,
+        subject: resolved.subjectId,
+        chapter: resolved.chapterId,
+        concept: resolved.conceptId,
+        subConcept: resolved.subConceptId,
+        classNum: resolved.classNum,
+        examType: Array.isArray(examType) ? examType : (examType ? [examType] : (q.examType || [])),
+        difficulty: null,
+        marks: parseInt(marks, 10) || q.marks || 4,
+        negativeMarks: parseInt(negativeMarks, 10) || q.negativeMarks || 1,
+        board: board || q.board || '',
+        questionBank: questionBank || q.questionBank || '',
+        createdBy: req.user._id,
+        modifiedBy: req.user._id,
+      });
+    }
 
     const inserted = await Question.insertMany(finalQuestions);
     const statsObjects = inserted.map(q => ({ questionId: q._id }));
@@ -734,8 +864,18 @@ exports.bulkSaveQuestions = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Please provide questions array' });
     }
 
+    const defaults = {
+      subjectId: subject,
+      chapterId: chapter,
+      conceptId: concept,
+      subConceptId: subConcept,
+      classNum: classNum ? parseInt(classNum, 10) : null
+    };
+
     const savedQuestions = [];
     for (const q of questions) {
+      const resolved = await resolveOrCreateSyllabus(q, defaults);
+
       let slots = [];
       if (Array.isArray(q.imageSlots) && q.imageSlots.length > 0) {
         slots = q.imageSlots.map(s => ({
@@ -823,11 +963,11 @@ exports.bulkSaveQuestions = async (req, res) => {
         optionDImage,
         solutionImage,
         imageSlots: uniqueSlots,
-        subject: subject || q.subject,
-        chapter: chapter || q.chapter,
-        concept: concept || q.concept,
-        subConcept: subConcept || q.subConcept || null,
-        classNum: classNum ? parseInt(classNum, 10) : (q.classNum ? parseInt(q.classNum, 10) : null),
+        subject: resolved.subjectId,
+        chapter: resolved.chapterId,
+        concept: resolved.conceptId,
+        subConcept: resolved.subConceptId,
+        classNum: resolved.classNum,
         examType: Array.isArray(examType) ? examType : (q.examType || []),
         difficulty: null, // bulk saved questions start unclassified
         marks: parseInt(marks || q.marks, 10) || 4,
