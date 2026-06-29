@@ -871,9 +871,39 @@ const ImportCenter = () => {
                       className="text-xs text-danger-500 font-semibold hover:text-danger-600 cursor-pointer"
                     >
                       Discard
-                    </button>
                   </div>
                 </div>
+
+                {/* Dynamic Syllabus Badges */}
+                {(q.subject || q.classNum || q.chapter || q.concept || q.subConcept) && (
+                  <div className="flex flex-wrap gap-2 text-[10px] font-bold bg-slate-50 dark:bg-slate-900/40 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/80">
+                    {q.subject && (
+                      <span className="bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 px-2.5 py-1 rounded-md">
+                        Subject: {q.subject}
+                      </span>
+                    )}
+                    {q.classNum && (
+                      <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-1 rounded-md">
+                        Class: {q.classNum}
+                      </span>
+                    )}
+                    {q.chapter && (
+                      <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-1 rounded-md">
+                        Chapter: {q.chapter}
+                      </span>
+                    )}
+                    {q.concept && (
+                      <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-1 rounded-md">
+                        Concept: {q.concept}
+                      </span>
+                    )}
+                    {q.subConcept && (
+                      <span className="bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-md">
+                        Sub-Concept: {q.subConcept}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Text editor fields */}
                 <div className="space-y-4">
@@ -979,32 +1009,43 @@ const ImportCenter = () => {
                 <div>
                   <label className="text-slate-400 block font-semibold">Subject</label>
                   <p className="text-slate-700 dark:text-slate-200 font-bold">
-                    {subjects.find(s => s._id === selectedSubject)?.name || 'N/A'}
+                    {subjects.find(s => s._id === selectedSubject)?.name || (parsedQuestions.some(q => q.subject) ? 'Dynamic (from JSON)' : 'N/A')}
                   </p>
                 </div>
                 <div>
                   <label className="text-slate-400 block font-semibold">Chapter</label>
                   <p className="text-slate-700 dark:text-slate-200">
-                    {chapters.find(c => c._id === selectedChapter)?.name || 'N/A'}
+                    {chapters.find(c => c._id === selectedChapter)?.name || (parsedQuestions.some(q => q.chapter) ? 'Dynamic (from JSON)' : 'N/A')}
                   </p>
                 </div>
                 <div>
                   <label className="text-slate-400 block font-semibold">Concept (Topic)</label>
                   <p className="text-slate-700 dark:text-slate-200">
-                    {concepts.find(c => c._id === selectedConcept)?.name || 'N/A'}
+                    {concepts.find(c => c._id === selectedConcept)?.name || (parsedQuestions.some(q => q.concept) ? 'Dynamic (from JSON)' : 'N/A')}
                   </p>
                 </div>
-                {selectedSubConcept && (
+                {selectedSubConcept ? (
                   <div>
                     <label className="text-slate-400 block font-semibold">Sub-Concept</label>
                     <p className="text-slate-700 dark:text-slate-200">
                       {subConcepts.find(s => s._id === selectedSubConcept)?.name || 'N/A'}
                     </p>
                   </div>
+                ) : (
+                  parsedQuestions.some(q => q.subConcept) && (
+                    <div>
+                      <label className="text-slate-400 block font-semibold">Sub-Concept</label>
+                      <p className="text-slate-700 dark:text-slate-200 text-emerald-600 dark:text-emerald-400 font-semibold">
+                        Dynamic (from JSON)
+                      </p>
+                    </div>
+                  )
                 )}
                 <div>
                   <label className="text-slate-400 block font-semibold">Class Level</label>
-                  <p className="text-slate-700 dark:text-slate-200 font-bold">Class {classNum}</p>
+                  <p className="text-slate-700 dark:text-slate-200 font-bold">
+                    {selectedSubject ? `Class ${classNum}` : (parsedQuestions.some(q => q.classNum) ? 'Dynamic (from JSON)' : 'Class 11')}
+                  </p>
                 </div>
               </div>
 
