@@ -699,6 +699,39 @@ exports.bulkUpdateDifficulty = async (req, res) => {
 };
 
 /**
+ * @desc    Bulk delete multiple questions
+ * @route   POST /api/questions/bulk-delete
+ * @access  Private (Admin Only)
+ */
+exports.bulkDeleteQuestions = async (req, res) => {
+  try {
+    const { questionIds } = req.body;
+    if (!questionIds || !Array.isArray(questionIds) || questionIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'Please provide questionIds array' });
+    }
+
+    // Delete questions
+    const result = await Question.deleteMany({ _id: { $in: questionIds } });
+    
+    // Delete statistics
+    await QuestionStatistics.deleteMany({ questionId: { $in: questionIds } });
+
+    await logActivity(req, 'BULK_DELETE_QUESTIONS',
+      `Bulk deleted ${result.deletedCount} questions`,
+      null, 'warning', { count: result.deletedCount, questionIds });
+
+    res.status(200).json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `Successfully deleted ${result.deletedCount} questions`,
+    });
+  } catch (error) {
+    console.error('Bulk delete error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
  * @desc    Parse raw pasted question text into structured format
  * @route   POST /api/questions/parse-text
  * @access  Private (Admin Only)

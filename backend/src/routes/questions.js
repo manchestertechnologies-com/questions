@@ -16,6 +16,7 @@ const {
   updateImageField,
   deleteImageField,
   bulkUpdateDifficulty,
+  bulkDeleteQuestions,
   parseQuestionText,
   getAuditLogs,
   getSecurityEvents,
@@ -40,6 +41,7 @@ router.post('/bulk-save', protect, adminOnly, bulkSaveQuestions);
 
 // ─── Difficulty Bulk Update ────────────────────────────────────────────────────
 router.put('/bulk-difficulty', protect, adminOnly, bulkUpdateDifficulty);
+router.post('/bulk-delete', protect, adminOnly, bulkDeleteQuestions);
 
 // ─── Temp Image Upload ────────────────────────────────────────────────────────
 router.post('/temp-upload', protect, adminOnly, uploadImage.single('image'), uploadTempImage);
